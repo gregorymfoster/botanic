@@ -4,60 +4,6 @@ import SwiftUI
 
 enum AppTab: Hashable { case today, history, settings }
 
-/// The floating frosted-glass tab bar. The Today tab shows a pulsing dot while an experience is live.
-struct DuskTabBar: View {
-    @Binding var selected: AppTab
-    var live: Bool
-
-    var body: some View {
-        HStack(spacing: 0) {
-            tab(.today, "Today", systemImage: "circle.fill", showsLiveDot: live)
-            tab(.history, "History", systemImage: "clock")
-            tab(.settings, "Settings", systemImage: "gearshape")
-        }
-        .padding(.horizontal, 6)
-        .frame(height: 66)
-        .background(
-            Capsule(style: .continuous)
-                .fill(.ultraThinMaterial)
-                .environment(\.colorScheme, .dark)
-        )
-        .overlay(Capsule(style: .continuous).strokeBorder(Dusk.glassStroke, lineWidth: 1))
-        .overlay(alignment: .top) {
-            Capsule().fill(.white.opacity(0.14)).frame(height: 1).padding(.horizontal, 18)
-        }
-        .shadow(color: .black.opacity(0.4), radius: 28, y: 14)
-        .padding(.horizontal, 18)
-    }
-
-    private func tab(_ tab: AppTab, _ title: String, systemImage: String, showsLiveDot: Bool = false) -> some View {
-        let active = selected == tab
-        return Button {
-            selected = tab
-        } label: {
-            VStack(spacing: 5) {
-                ZStack {
-                    Image(systemName: systemImage)
-                        .font(.system(size: 19, weight: active ? .semibold : .regular))
-                    if showsLiveDot {
-                        PulseDot(size: 7)
-                            .offset(x: 11, y: -10)
-                    }
-                }
-                .frame(height: 24)
-                Text(title)
-                    .font(Dusk.sans(10, .semibold))
-            }
-            .foregroundStyle(active ? Dusk.peach : Dusk.muted(0.42))
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(active ? [.isSelected, .isButton] : .isButton)
-    }
-}
-
 // MARK: - Live indicators
 
 /// The pulsing peach dot used on the live pill and Today tab.
@@ -97,35 +43,21 @@ struct LivePill: View {
 
 // MARK: - Segmented two-way toggle
 
-/// The pill segmented control (e.g. Now / Schedule, Experiences / Supplements).
+/// A native segmented control (e.g. Now / Schedule, Experiences / Supplements), themed to the Dusk
+/// palette via `Dusk.applyControlAppearance()`. Keeps a string/index API so call sites stay simple.
 struct SegmentedToggle: View {
     var options: [String]
     @Binding var selection: Int
 
     var body: some View {
-        HStack(spacing: 7) {
+        Picker("", selection: $selection) {
             ForEach(Array(options.enumerated()), id: \.offset) { index, label in
-                let active = selection == index
-                Text(label)
-                    .font(Dusk.sans(13.5, active ? .semibold : .regular))
-                    .foregroundStyle(active ? Dusk.onAccent : Dusk.muted(0.62))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background {
-                        if active {
-                            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                                .fill(Dusk.accentGradient)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { selection = index }
-                    }
-                    .accessibilityAddTraits(active ? [.isSelected, .isButton] : .isButton)
+                Text(label).tag(index)
             }
         }
-        .padding(5)
-        .glassCard(fill: 0.05, cornerRadius: 15)
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .sensoryFeedback(.selection, trigger: selection)
     }
 }
 
@@ -138,7 +70,10 @@ struct TagChip: View {
     var action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            Haptics.selection()
+            action()
+        } label: {
             Text(label)
                 .font(Dusk.sans(13.5, selected ? .semibold : .regular))
                 .foregroundStyle(selected ? Dusk.onAccent : Dusk.muted(0.72))

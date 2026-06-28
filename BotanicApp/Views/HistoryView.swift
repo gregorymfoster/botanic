@@ -14,13 +14,9 @@ struct HistoryView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 7) {
-                    SectionLabel(title: "History", color: Dusk.pinkSoft)
-                    Text(countTitle)
-                        .font(Dusk.serif(30, .medium))
-                        .foregroundStyle(Dusk.text)
-                }
-                .padding(.top, 4)
+                Text(countTitle)
+                    .font(Dusk.serifItalic(16))
+                    .foregroundStyle(Dusk.muted(0.6))
 
                 Button { autoOpenInsights = true } label: {
                     insightsCard
@@ -37,9 +33,11 @@ struct HistoryView: View {
             }
             .padding(.horizontal, 22)
             .padding(.top, 8)
-            .padding(.bottom, 96)
+            .padding(.bottom, 16)
         }
         .scrollIndicators(.hidden)
+        .navigationTitle("History")
+        .navigationBarTitleDisplayMode(.large)
         .navigationDestination(isPresented: $autoOpenInsights) {
             InsightsView(experiences: experiences)
         }
@@ -165,11 +163,22 @@ struct ExperienceRow: View {
 
     private var swatchColors: [Color] {
         let palettes: [[Color]] = [
-            [Color(r: 253, g: 228, b: 214), Dusk.peach, Color(r: 217, g: 122, b: 90)],
-            [Color(r: 251, g: 220, b: 230), Dusk.pink, Color(r: 204, g: 111, b: 147)],
-            [Color(r: 230, g: 220, b: 251), Dusk.lavender, Color(r: 155, g: 134, b: 212)]
+            [Color(r: 253, g: 228, b: 214), Dusk.peach, Color(r: 217, g: 122, b: 90)],   // warm — peach
+            [Color(r: 251, g: 220, b: 230), Dusk.pink, Color(r: 204, g: 111, b: 147)],   // mid — pink
+            [Color(r: 230, g: 220, b: 251), Dusk.lavender, Color(r: 155, g: 134, b: 212)] // cool — lavender
         ]
-        let idx = abs(experience.feltSummary?.valence.hashValue ?? experience.title.hashValue) % palettes.count
+        let idx: Int
+        if let valence = experience.feltSummary?.valence {
+            // Warmer for calmer / more-pleasant evenings, cooler for harder ones — descriptive, never
+            // prescriptive, and stable across launches (unlike `Double.hashValue`, which Swift seeds
+            // randomly per process, so the color used to change on every relaunch).
+            idx = valence >= 0.66 ? 0 : (valence >= 0.4 ? 1 : 2)
+        } else {
+            // No reflection recorded — derive a stable color from the experience id rather than a
+            // per-launch random hash.
+            let bytes = experience.id.uuid
+            idx = (Int(bytes.0) &+ Int(bytes.15)) % palettes.count
+        }
         return palettes[idx]
     }
 

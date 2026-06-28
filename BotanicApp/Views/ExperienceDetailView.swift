@@ -15,27 +15,24 @@ struct ExperienceDetailView: View {
     var body: some View {
         ZStack {
             DuskBackground()
-            VStack(spacing: 0) {
-                header
-                    .padding(.horizontal, 22).padding(.top, 8)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 13) {
-                        titleBlock
-                        contextStrip
-                        supplementsCard
-                        if let note = experience.noteToFuture { noteCard(note) }
-                        if !moments.isEmpty { momentsSection }
-                        privacyRow
-                        exportButton
-                        deleteButton
-                    }
-                    .padding(.horizontal, 22)
-                    .padding(.top, 12)
-                    .padding(.bottom, 40)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 13) {
+                    titleBlock
+                    contextStrip
+                    supplementsCard
+                    if let note = experience.noteToFuture { noteCard(note) }
+                    if !moments.isEmpty { momentsSection }
+                    privacyRow
+                    exportButton
+                    deleteButton
                 }
+                .padding(.horizontal, 22)
+                .padding(.top, 12)
+                .padding(.bottom, 40)
             }
         }
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationTitle(BotanicFormat.shortDate(experience.startedAt, includeYear: true))
+        .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("Delete this experience?", isPresented: $showingDeleteConfirm, titleVisibility: .visible) {
             Button("Delete experience", role: .destructive) {
                 ExperienceStore.delete(experience, in: modelContext)
@@ -44,20 +41,6 @@ struct ExperienceDetailView: View {
             Button("Keep", role: .cancel) {}
         } message: {
             Text("This removes its supplements, check-ins, and notes. This can't be undone.")
-        }
-    }
-
-    private var header: some View {
-        HStack {
-            Button { dismiss() } label: {
-                Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Dusk.text).frame(width: 38, height: 38).glassCard(fill: 0.07, cornerRadius: 19)
-            }
-            Spacer()
-            Text(BotanicFormat.shortDate(experience.startedAt, includeYear: true))
-                .font(Dusk.sans(13)).foregroundStyle(Dusk.muted(0.45))
-            Spacer()
-            Color.clear.frame(width: 38, height: 38)
         }
     }
 

@@ -68,40 +68,52 @@ struct RootView: View {
         }
     }
 
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            DuskBackground(live: liveExperience != nil && selectedTab == .today)
+    /// Constrains each tab's content to a comfortable reading width and lets the dusk backdrop
+    /// (set as the TabView's background) show through behind it.
+    private func tabContent<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .frame(maxWidth: 620)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.clear)
+    }
 
-            Group {
-                switch selectedTab {
-                case .today:
-                    TodayView(
-                        live: liveExperience,
-                        onAdd: { showingAdd = true },
-                        onCheckIn: { showingCheckIn = true },
-                        onNote: { showingJournal = true },
-                        onGround: { showingGrounding = true },
-                        onSupport: reachSupport,
-                        onEnd: { showingEnd = true }
-                    )
-                case .history:
-                    NavigationStack(path: $historyPath) {
-                        HistoryView(experiences: experiences, autoOpenInsights: $pendingInsights)
-                            .navigationDestination(for: Experience.self) { exp in
-                                ExperienceDetailView(experience: exp)
-                            }
-                    }
-                case .settings:
-                    NavigationStack {
-                        SettingsView(experiences: experiences)
-                    }
+    var body: some View {
+        TabView(selection: $selectedTab) {
+            tabContent {
+                TodayView(
+                    live: liveExperience,
+                    onAdd: { showingAdd = true },
+                    onCheckIn: { showingCheckIn = true },
+                    onNote: { showingJournal = true },
+                    onGround: { showingGrounding = true },
+                    onSupport: reachSupport,
+                    onEnd: { showingEnd = true }
+                )
+            }
+            .tabItem { Label("Today", systemImage: "circle.fill") }
+            .tag(AppTab.today)
+
+            tabContent {
+                NavigationStack(path: $historyPath) {
+                    HistoryView(experiences: experiences, autoOpenInsights: $pendingInsights)
+                        .navigationDestination(for: Experience.self) { exp in
+                            ExperienceDetailView(experience: exp)
+                        }
                 }
             }
-            .frame(maxWidth: 620)
-            .frame(maxWidth: .infinity)
+            .tabItem { Label("History", systemImage: "clock") }
+            .tag(AppTab.history)
 
-            DuskTabBar(selected: $selectedTab, live: liveExperience != nil)
+            tabContent {
+                NavigationStack {
+                    SettingsView(experiences: experiences)
+                }
+            }
+            .tabItem { Label("Settings", systemImage: "gearshape") }
+            .tag(AppTab.settings)
         }
+        .tint(Dusk.peach)
+        .background(DuskBackground(live: liveExperience != nil && selectedTab == .today))
         .ignoresSafeArea(.keyboard)
         .onAppear {
             guard !didSeed else { return }

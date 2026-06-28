@@ -120,6 +120,7 @@ struct JournalView: View {
     private func send() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        Haptics.tap()
         if isOneWord {
             onAdd(trimmed, .oneWord, nil)
         } else {

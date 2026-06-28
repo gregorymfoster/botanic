@@ -49,8 +49,11 @@ struct CheckInView: View {
 
                     Spacer(minLength: 8)
 
-                    Button("Save check-in") { onSave(commit()) }
-                        .buttonStyle(DuskPrimaryButton(height: 54))
+                    Button("Save check-in") {
+                        Haptics.success()
+                        onSave(commit())
+                    }
+                    .buttonStyle(DuskPrimaryButton(height: 54))
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 28)

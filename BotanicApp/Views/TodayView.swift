@@ -72,7 +72,7 @@ private struct IdleTodayView: View {
         }
         .padding(.horizontal, 22)
         .padding(.top, 16)
-        .padding(.bottom, 96)
+        .padding(.bottom, 16)
     }
 }
 
@@ -105,7 +105,7 @@ private struct LiveExperienceView: View {
 
             actionsRow
                 .padding(.horizontal, 20)
-                .padding(.bottom, 96)
+                .padding(.bottom, 16)
         }
         .padding(.top, 8)
     }

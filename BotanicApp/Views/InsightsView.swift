@@ -4,7 +4,6 @@ import SwiftUI
 
 struct InsightsView: View {
     var experiences: [Experience]
-    @Environment(\.dismiss) private var dismiss
 
     private var summary: InsightsSummary {
         InsightsEngine.summary(for: ExperienceStore.snapshots(from: experiences.filter { $0.endedAt != nil }))
@@ -13,29 +12,14 @@ struct InsightsView: View {
     var body: some View {
         ZStack {
             DuskBackground()
-            VStack(spacing: 0) {
-                header.padding(.horizontal, 22).padding(.top, 8)
-                if summary.isEmpty {
-                    emptyState
-                } else {
-                    content
-                }
+            if summary.isEmpty {
+                emptyState
+            } else {
+                content
             }
         }
-        .toolbar(.hidden, for: .navigationBar)
-    }
-
-    private var header: some View {
-        ZStack {
-            Text("Insights").font(Dusk.serif(18)).foregroundStyle(Dusk.text)
-            HStack {
-                Button { dismiss() } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(Dusk.text).frame(width: 38, height: 38).glassCard(fill: 0.07, cornerRadius: 19)
-                }
-                Spacer()
-            }
-        }
+        .navigationTitle("Insights")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private var emptyState: some View {

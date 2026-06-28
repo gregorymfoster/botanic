@@ -5,6 +5,7 @@ import SwiftUI
 struct BotanicApp: App {
     init() {
         AppFonts.registerAll()
+        Dusk.applyControlAppearance()
     }
 
     var body: some Scene {

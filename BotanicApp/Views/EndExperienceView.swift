@@ -63,6 +63,7 @@ struct EndExperienceView: View {
                     Button("Not yet") { dismiss() }
                         .buttonStyle(DuskSoftButton())
                     Button("End & reflect") {
+                        Haptics.tap()
                         reflection.feeling = experience.checkIns.last?.feeling ?? .settled
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { phase = .reflect }
                     }
@@ -125,8 +126,11 @@ struct EndExperienceView: View {
                         .padding(.horizontal, 16).padding(.vertical, 14)
                         .glassCard(fill: 0.05, cornerRadius: 18)
 
-                    Button("End & save to history") { onEnd(reflection) }
-                        .buttonStyle(DuskPrimaryButton(height: 54))
+                    Button("End & save to history") {
+                        Haptics.success()
+                        onEnd(reflection)
+                    }
+                    .buttonStyle(DuskPrimaryButton(height: 54))
                         .padding(.top, 4)
                 }
                 .padding(.horizontal, 24)

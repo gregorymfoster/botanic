@@ -19,21 +19,16 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 7) {
-                    SectionLabel(title: "Settings", color: Dusk.pinkSoft)
-                    Text("Botanic")
-                        .font(Dusk.serif(30, .medium)).foregroundStyle(Dusk.text)
-                }
-                .padding(.top, 4)
-
                 supportCard
                 privacyCard
                 exportAllCard
                 aboutCard
             }
-            .padding(.horizontal, 22).padding(.top, 8).padding(.bottom, 96)
+            .padding(.horizontal, 22).padding(.top, 8).padding(.bottom, 16)
         }
         .scrollIndicators(.hidden)
+        .navigationTitle("Settings")
+        .navigationBarTitleDisplayMode(.large)
     }
 
     private var supportCard: some View {

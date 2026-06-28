@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Wraps sheet content in the dusk backdrop with a consistent header bar (the sheets use
-/// `.presentationBackground(.clear)` so each provides its own background). Leading is a Cancel /
-/// chevron, center a serif title, trailing an optional primary action.
+/// Wraps sheet content in a native navigation bar over the dusk backdrop (the sheets use
+/// `.presentationBackground(.clear)` so each provides its own background). The bar is transparent
+/// with a Spectral serif inline title (themed in `Dusk.applyControlAppearance()`); leading is a
+/// Cancel / chevron dismiss, trailing an optional primary action.
 struct SheetScaffold<Content: View>: View {
     var title: String
     var leading: LeadingStyle = .cancel
@@ -12,59 +13,46 @@ struct SheetScaffold<Content: View>: View {
     var onTrailing: (() -> Void)?
     @ViewBuilder var content: Content
 
-    enum LeadingStyle { case cancel, chevron, none }
+    enum LeadingStyle: Equatable { case cancel, chevron, none }
 
     var body: some View {
-        ZStack {
-            DuskBackground()
-            VStack(spacing: 0) {
-                header
-                    .padding(.horizontal, 22)
-                    .padding(.top, 18)
-                    .padding(.bottom, 6)
-                content
-            }
+        NavigationStack {
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(DuskBackground().ignoresSafeArea())
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    if leading != .none {
+                        ToolbarItem(placement: .topBarLeading) { leadingControl }
+                    }
+                    if let trailingTitle, let onTrailing {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button(action: onTrailing) {
+                                Text(trailingTitle).font(Dusk.sans(14, .semibold))
+                            }
+                            .tint(Dusk.pinkSoft)
+                            .disabled(!trailingEnabled)
+                        }
+                    }
+                }
         }
         .presentationDragIndicator(.visible)
-    }
-
-    private var header: some View {
-        ZStack {
-            Text(title)
-                .font(Dusk.serif(18))
-                .foregroundStyle(Dusk.text)
-
-            HStack {
-                leadingControl
-                Spacer()
-                if let trailingTitle, let onTrailing {
-                    Button(action: onTrailing) {
-                        Text(trailingTitle)
-                            .font(Dusk.sans(14, .semibold))
-                            .foregroundStyle(trailingEnabled ? Dusk.pinkSoft : Dusk.muted(0.3))
-                    }
-                    .disabled(!trailingEnabled)
-                }
-            }
-        }
     }
 
     @ViewBuilder private var leadingControl: some View {
         switch leading {
         case .cancel:
-            Button(action: onLeading) {
-                Text("Cancel").font(Dusk.sans(15)).foregroundStyle(Dusk.muted(0.6))
-            }
+            Button("Cancel", action: onLeading)
+                .font(Dusk.sans(15))
+                .tint(Dusk.muted(0.6))
         case .chevron:
             Button(action: onLeading) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Dusk.text)
-                    .frame(width: 38, height: 38)
-                    .glassCard(fill: 0.07, cornerRadius: 19)
+                Image(systemName: "chevron.left").font(.system(size: 16, weight: .semibold))
             }
+            .tint(Dusk.text)
         case .none:
-            Color.clear.frame(width: 38, height: 1)
+            EmptyView()
         }
     }
 }
