@@ -52,12 +52,21 @@ struct HistoryView: View {
 
     private var insightsCard: some View {
         HStack(spacing: 13) {
-            Sparkline(values: sparkValues)
-                .frame(width: 46, height: 30)
+            Group {
+                if sparkValues.count > 1 {
+                    Sparkline(values: sparkValues)
+                } else {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .font(.system(size: 18)).foregroundStyle(Dusk.muted(0.35))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .accessibilityHidden(true)
+                }
+            }
+            .frame(width: 46, height: 30)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Patterns & insights")
                     .font(Dusk.sans(15, .semibold)).foregroundStyle(Dusk.text)
-                Text("Trends, correlations & what helps — across \(finished.count) experiences")
+                Text(insightsSubtitle)
                     .font(Dusk.sans(11.5)).foregroundStyle(Dusk.muted(0.5))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -68,9 +77,16 @@ struct HistoryView: View {
         .warmGlassCard()
     }
 
+    private var insightsSubtitle: String {
+        finished.isEmpty
+            ? "Trends, correlations & what helps — appear as you finish experiences"
+            : "Trends, correlations & what helps — across \(finished.count) experiences"
+    }
+
+    /// Felt-valence trend across finished experiences (oldest → newest). Empty/single until there's
+    /// enough history to draw a line — the card shows a placeholder glyph in that case.
     private var sparkValues: [Double] {
-        let vals = finished.reversed().compactMap { $0.feltSummary?.valence }
-        return vals.isEmpty ? [0.4, 0.55, 0.5, 0.7, 0.65, 0.85] : vals
+        finished.reversed().compactMap { $0.feltSummary?.valence }
     }
 
     private var experiencesList: some View {

@@ -20,7 +20,7 @@ struct GroundingView: View {
                     }
 
                     stepsCard
-                    if !supportName.isEmpty { supportButton }
+                    if !supportName.isEmpty && PhoneDialer.canDial(supportNumber) { supportButton }
                     emergencyButton
 
                     Text("Botanic is a private journaling app — not medical advice, and not for dosing or medical decisions. In an emergency, call your local emergency services.")

@@ -15,6 +15,24 @@ swift test --package-path BotanicKit
 xcodebuild -project Botanic.xcodeproj -scheme Botanic -destination 'generic/platform=iOS Simulator' build
 ```
 
+## Local Verify Gate
+
+There is no cloud CI — `scripts/check.sh` is the canonical "is it safe to commit/release?" gate.
+
+```sh
+scripts/check.sh            # full: package tests → xcodegen → simulator build (+ swiftlint if configured)
+scripts/check.sh --fast     # package tests only — the inner dev loop
+scripts/check.sh --release  # full gate plus a clean build, before tagging a release
+```
+
+Run the full gate before committing and the `--release` gate before releasing. To enforce it
+automatically, `scripts/install-hooks.sh` wires `pre-commit → check.sh --fast` and
+`pre-push → check.sh` (opt-in, per contributor; bypass once with `git commit/push --no-verify`).
+
+> Screenshot note: capturing `NavigationStack`-backed tabs (History, Settings, and pushed Insights/
+> Detail) via `simctl io screenshot` currently renders blank on the Xcode 26 simulator; sheet-based
+> screens (Add, Journal, Grounding, etc.) capture fine. Verify those tabs by manual navigation.
+
 ## Change Notes
 
 - Prefer adding computation (insights, formatting, vocab) to `BotanicKit` with package tests first;

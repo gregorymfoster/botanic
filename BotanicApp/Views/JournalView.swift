@@ -8,8 +8,11 @@ struct JournalView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
     @State private var promptIndex = 0
+    /// 0 = freeform (prompted), 1 = one word. One-word entries feed the Insights "words you reach for" card.
+    @State private var mode = 0
     @FocusState private var composing: Bool
 
+    private var isOneWord: Bool { mode == 1 }
     private var prompt: String { JournalPrompt.at(promptIndex) }
 
     var body: some View {
@@ -57,32 +60,43 @@ struct JournalView: View {
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 7) {
-                Image(systemName: "pencil").font(.system(size: 12)).foregroundStyle(Dusk.peach)
-                Text("FREEFORM · JUST WRITE")
-                    .font(Dusk.sans(10, .bold)).tracking(1.6).foregroundStyle(Dusk.pinkSoft)
+            SegmentedToggle(options: ["Freeform", "One word"], selection: $mode)
+
+            if isOneWord {
+                TextField("", text: $text, prompt: Text("One word for right now…").foregroundColor(Dusk.muted(0.4)))
+                    .font(Dusk.serifItalic(16.5))
+                    .foregroundStyle(Dusk.text)
+                    .lineLimit(1)
+                    .submitLabel(.done)
+                    .focused($composing)
+                    .onSubmit(send)
+            } else {
+                TextField("", text: $text, prompt: Text(prompt).foregroundColor(Dusk.muted(0.4)), axis: .vertical)
+                    .font(Dusk.serifItalic(16.5))
+                    .foregroundStyle(Dusk.text)
+                    .lineLimit(2...5)
+                    .focused($composing)
             }
 
-            TextField("", text: $text, prompt: Text(prompt).foregroundColor(Dusk.muted(0.4)), axis: .vertical)
-                .font(Dusk.serifItalic(16.5))
-                .foregroundStyle(Dusk.text)
-                .lineLimit(2...5)
-                .focused($composing)
-
             HStack {
-                Button {
-                    withAnimation { promptIndex += 1 }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.clockwise").font(.system(size: 12))
-                        Text("New prompt").font(Dusk.sans(12, .semibold))
+                if isOneWord {
+                    Text("A single word — feeds your insights over time.")
+                        .font(Dusk.sans(11.5)).foregroundStyle(Dusk.muted(0.45))
+                } else {
+                    Button {
+                        withAnimation { promptIndex += 1 }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.clockwise").font(.system(size: 12))
+                            Text("New prompt").font(Dusk.sans(12, .semibold))
+                        }
+                        .foregroundStyle(Dusk.peach)
+                        .padding(.horizontal, 13).padding(.vertical, 7)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(Dusk.peach.opacity(0.12)))
+                        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Dusk.peach.opacity(0.26), lineWidth: 1))
                     }
-                    .foregroundStyle(Dusk.peach)
-                    .padding(.horizontal, 13).padding(.vertical, 7)
-                    .background(RoundedRectangle(cornerRadius: 14).fill(Dusk.peach.opacity(0.12)))
-                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Dusk.peach.opacity(0.26), lineWidth: 1))
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
 
                 Spacer()
 
@@ -106,9 +120,13 @@ struct JournalView: View {
     private func send() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        onAdd(trimmed, .freeform, prompt)
+        if isOneWord {
+            onAdd(trimmed, .oneWord, nil)
+        } else {
+            onAdd(trimmed, .freeform, prompt)
+            promptIndex += 1
+        }
         text = ""
-        promptIndex += 1
         composing = false
     }
 }

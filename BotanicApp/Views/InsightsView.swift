@@ -107,9 +107,19 @@ struct InsightsView: View {
                 }
             }
             .frame(height: 132)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("How they felt, over time")
+            .accessibilityValue(feltTrendDescription)
         }
         .padding(.horizontal, 17).padding(.vertical, 15)
         .warmGlassCard()
+    }
+
+    /// VoiceOver summary of the felt-trend chart, which is otherwise opaque to assistive tech.
+    private var feltTrendDescription: String {
+        let count = summary.feltTrend.count
+        let span = count == 1 ? "1 experience" : "\(count) experiences"
+        return summary.trendingCalmer ? "Trending calmer across \(span)" : "Steady across \(span)"
     }
 
     private var statTiles: some View {

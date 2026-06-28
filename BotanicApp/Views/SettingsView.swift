@@ -10,6 +10,12 @@ struct SettingsView: View {
         experiences.filter { $0.endedAt != nil }.sorted { $0.startedAt > $1.startedAt }
     }
 
+    /// Shown once the user starts filling in support details but the number can't be dialed — explains
+    /// why the Grounding Call button stays hidden.
+    private var showsNumberHint: Bool {
+        (!supportName.isEmpty || !supportNumber.isEmpty) && !PhoneDialer.canDial(supportNumber)
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -45,6 +51,11 @@ struct SettingsView: View {
                 .keyboardType(.phonePad)
                 .padding(.horizontal, 14).padding(.vertical, 12)
                 .glassCard(fill: 0.05, cornerRadius: 14)
+            if showsNumberHint {
+                Label("Add a number we can dial so the Call button appears on Grounding.", systemImage: "info.circle")
+                    .font(Dusk.sans(11.5)).foregroundStyle(Dusk.peachLight.opacity(0.9))
+                    .accessibilityHint("The support Call button needs a dialable number")
+            }
         }
         .padding(.horizontal, 17).padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)

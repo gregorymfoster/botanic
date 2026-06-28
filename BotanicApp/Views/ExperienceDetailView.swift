@@ -84,13 +84,20 @@ struct ExperienceDetailView: View {
 
     private var contextStrip: some View {
         HStack(spacing: 8) {
-            contextTile("mappin.and.ellipse", Dusk.pinkSoft, experience.locationContext ?? "—")
-            contextTile("waveform.path", Dusk.lavender, experience.feltSummary?.rawValue ?? "—")
-            contextTile("checkmark.circle", Dusk.peach, "\(experience.checkIns.count) check-ins")
+            contextTile("mappin.and.ellipse", Dusk.pinkSoft,
+                        experience.locationContext ?? "—", name: "Location",
+                        spoken: experience.locationContext ?? "not set")
+            contextTile("waveform.path", Dusk.lavender,
+                        experience.feltSummary?.rawValue ?? "—", name: "Felt",
+                        spoken: experience.feltSummary?.rawValue ?? "not recorded")
+            contextTile("checkmark.circle", Dusk.peach,
+                        "\(experience.checkIns.count) check-ins", name: "Check-ins",
+                        spoken: "\(experience.checkIns.count)")
         }
     }
 
-    private func contextTile(_ icon: String, _ tint: Color, _ label: String) -> some View {
+    private func contextTile(_ icon: String, _ tint: Color, _ label: String,
+                             name: String, spoken: String) -> some View {
         VStack(spacing: 5) {
             Image(systemName: icon).font(.system(size: 15)).foregroundStyle(tint)
                 .accessibilityHidden(true)
@@ -98,7 +105,8 @@ struct ExperienceDetailView: View {
         }
         .frame(maxWidth: .infinity).padding(.vertical, 11)
         .glassCard(fill: 0.05, cornerRadius: 15)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(name): \(spoken)")
     }
 
     private var supplementsCard: some View {
