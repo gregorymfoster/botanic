@@ -23,6 +23,19 @@ targets:
       - BotanicApp
     dependencies:
       - package: BotanicKit
+      - target: BotanicWidgets
+        embed: true
+    # A minimal Info.plist for the keys that can't be expressed as INFOPLIST_KEY_* build settings —
+    # the custom URL scheme (nested array) and the Live Activities flag. GENERATE_INFOPLIST_FILE: YES
+    # stays on and merges its synthesized keys (bundle id, version, executable, …) into this file.
+    info:
+      path: BotanicApp/Info.plist
+      properties:
+        NSSupportsLiveActivities: true
+        CFBundleURLTypes:
+          - CFBundleURLName: com.gregfoster.botanic
+            CFBundleURLSchemes:
+              - botanic
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.gregfoster.botanic
@@ -38,6 +51,30 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+  BotanicWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - BotanicWidgets
+    dependencies:
+      - package: BotanicKit
+    info:
+      path: BotanicWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Botanic
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gregfoster.botanic.BotanicWidgets
+        PRODUCT_NAME: BotanicWidgets
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Botanic
+        SKIP_INSTALL: YES
+        CODE_SIGN_STYLE: Automatic
+
   BotanicKitTests:
     type: bundle.unit-test
     platform: iOS

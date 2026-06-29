@@ -93,19 +93,21 @@ private struct LiveExperienceView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
 
+            // One scroll view holding the whole session — hero, quick actions, supplements, and the
+            // live timeline — so the content passes *under* the Liquid Glass tab bar and gives the
+            // glass live material to refract (the old pinned actions row sat on a static backdrop).
             ScrollView {
                 VStack(alignment: .leading, spacing: 13) {
                     heroCard
+                    actionsRow
                     supplementsSection
+                    timelineSection
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 13)
-                .padding(.bottom, 12)
+                .padding(.bottom, 20)
             }
-
-            actionsRow
-                .padding(.horizontal, 20)
-                .padding(.bottom, 16)
+            .scrollIndicators(.hidden)
         }
         .padding(.top, 8)
     }
@@ -177,6 +179,20 @@ private struct LiveExperienceView: View {
                 .glassCard(fill: 0.04, cornerRadius: 16)
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder private var timelineSection: some View {
+        let entries = ExperienceStore.timelineEntries(for: experience)
+        if !entries.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                SectionLabel(title: "Timeline", color: Dusk.muted(0.42))
+                    .padding(.top, 6)
+                    .padding(.bottom, 10)
+                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                    TimelineRow(entry: entry, isLast: index == entries.count - 1)
+                }
+            }
         }
     }
 

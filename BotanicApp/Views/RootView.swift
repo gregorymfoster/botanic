@@ -121,6 +121,18 @@ struct RootView: View {
             SampleData.seedIfRequested(into: modelContext, existing: experiences)
             applyScreenshotLaunchArgs()
         }
+        // Keyed on the live experience so it runs once `@Query` resolves one (and again across
+        // launches): re-attach to any surviving activity, then ensure one is running.
+        .task(id: liveExperience?.id) {
+            LiveActivityController.shared.adopt(liveExperienceID: liveExperience?.id)
+            if let live = liveExperience { ExperienceStore.resumeLiveActivity(for: live) }
+        }
+        .onOpenURL { url in
+            // botanic://checkin — opened from the Live Activity's "Check in" affordance.
+            guard url.scheme == "botanic", url.host == "checkin", liveExperience != nil else { return }
+            selectedTab = .today
+            showingCheckIn = true
+        }
         .sheet(isPresented: $showingAdd) {
             AddSupplementView(hasLiveExperience: liveExperience != nil) { draft in
                 ExperienceStore.addSupplement(draft, in: modelContext)

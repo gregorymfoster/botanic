@@ -5,9 +5,25 @@ struct SettingsView: View {
     var experiences: [Experience]
     @AppStorage("supportPersonName") private var supportName = ""
     @AppStorage("supportPersonNumber") private var supportNumber = ""
+    @AppStorage(NotificationManager.enabledKey) private var remindersEnabled = true
+    @AppStorage(NotificationManager.intervalKey) private var reminderIntervalMinutes = 90
+
+    private static let intervalOptions = [60, 90, 120]
 
     private var finished: [Experience] {
         experiences.filter { $0.endedAt != nil }.sorted { $0.startedAt > $1.startedAt }
+    }
+
+    private var hasLiveExperience: Bool {
+        experiences.contains { $0.endedAt == nil }
+    }
+
+    /// Bridges the 60/90/120-minute preference to the `SegmentedToggle`'s 0-based index.
+    private var intervalIndex: Binding<Int> {
+        Binding(
+            get: { Self.intervalOptions.firstIndex(of: reminderIntervalMinutes) ?? 1 },
+            set: { reminderIntervalMinutes = Self.intervalOptions[$0] }
+        )
     }
 
     /// Shown once the user starts filling in support details but the number can't be dialed — explains
@@ -20,6 +36,7 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 supportCard
+                remindersCard
                 privacyCard
                 exportAllCard
                 aboutCard
@@ -51,6 +68,38 @@ struct SettingsView: View {
                     .font(Dusk.sans(11.5)).foregroundStyle(Dusk.peachLight.opacity(0.9))
                     .accessibilityHint("The support Call button needs a dialable number")
             }
+        }
+        .padding(.horizontal, 17).padding(.vertical, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard(fill: 0.05, cornerRadius: 20)
+    }
+
+    private var remindersCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("CHECK-IN REMINDERS")
+                .font(Dusk.sans(10.5, .bold)).tracking(1.6).foregroundStyle(Dusk.pinkSoft.opacity(0.85))
+
+            Toggle(isOn: $remindersEnabled) {
+                Text("Gentle nudges to check in")
+                    .font(Dusk.sans(15, .semibold)).foregroundStyle(Dusk.text)
+            }
+            .tint(Dusk.peach)
+            .onChange(of: remindersEnabled) { _, enabled in
+                if enabled { NotificationManager.requestAuthorization() }
+                NotificationManager.refresh(isLive: hasLiveExperience)
+            }
+
+            if remindersEnabled {
+                Text("Every")
+                    .font(Dusk.sans(12)).foregroundStyle(Dusk.muted(0.5))
+                SegmentedToggle(options: ["60 min", "90 min", "120 min"], selection: intervalIndex)
+                    .onChange(of: reminderIntervalMinutes) { _, _ in
+                        NotificationManager.refresh(isLive: hasLiveExperience)
+                    }
+            }
+
+            Text("Reminders only arrive while an experience is live, and stop when you end it.")
+                .font(Dusk.sans(11.5)).foregroundStyle(Dusk.muted(0.5)).lineSpacing(1)
         }
         .padding(.horizontal, 17).padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)

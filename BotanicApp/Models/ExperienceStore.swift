@@ -70,12 +70,14 @@ enum ExperienceStore {
         entry.experience = experience
         context.insert(entry)
         save(context)
+        syncLiveActivity(for: experience)
         return experience
     }
 
     static func startExperience(in context: ModelContext, now: Date = Date()) -> Experience {
         let experience = Experience(title: defaultTitle(for: now), startedAt: now)
         context.insert(experience)
+        NotificationManager.scheduleRemindersIfEnabled()
         return experience
     }
 
@@ -91,6 +93,7 @@ enum ExperienceStore {
         checkIn.experience = experience
         context.insert(checkIn)
         save(context)
+        LiveActivityController.shared.update(liveState(for: experience))
     }
 
     static func addJournalEntry(text: String, kind: JournalKind, prompt: String?,
@@ -101,6 +104,7 @@ enum ExperienceStore {
         entry.experience = experience
         context.insert(entry)
         save(context)
+        LiveActivityController.shared.update(liveState(for: experience))
     }
 
     /// Closes the experience and applies the end-of-experience reflection.
@@ -109,6 +113,8 @@ enum ExperienceStore {
         experience.feltSummary = reflection.feeling
         experience.noteToFuture = cleaned(reflection.noteToFuture)
         save(context)
+        LiveActivityController.shared.end(liveState(for: experience))
+        NotificationManager.cancelReminders()
     }
 
     /// Permanently removes an experience and its cascaded supplements, check-ins, and journal entries.
@@ -169,6 +175,33 @@ enum ExperienceStore {
             ))
         }
         return ExperienceTimeline.build(inputs, start: experience.startedAt)
+    }
+
+    // MARK: - Live Activity bridge
+
+    /// Ensures a Live Activity is running for an experience that's still live at launch — after first
+    /// re-attaching to any activity from a previous run (`adopt`), this re-creates one if none
+    /// survived (force-quit, expiry). Safe to call repeatedly; `start` updates rather than duplicates.
+    static func resumeLiveActivity(for experience: Experience) {
+        syncLiveActivity(for: experience)
+    }
+
+    /// Starts (or refreshes) the Live Activity for a live experience. Closed experiences are a no-op.
+    private static func syncLiveActivity(for experience: Experience) {
+        guard experience.isLive else { return }
+        LiveActivityController.shared.start(experienceID: experience.id, state: liveState(for: experience))
+    }
+
+    /// Maps a SwiftData `Experience` to the framework-free `ContentState` the widget renders —
+    /// mirroring the `snapshots(from:)` / `timelineEntries(for:)` bridges (no SwiftData in the package).
+    private static func liveState(for experience: Experience) -> BotanicActivityAttributes.ContentState {
+        .init(
+            startedAt: experience.startedAt,
+            title: experience.title,
+            supplementCount: experience.loggedSupplements.count,
+            checkInCount: experience.checkIns.count,
+            latestSupplement: experience.loggedSupplements.last?.name
+        )
     }
 
     // MARK: - Helpers
