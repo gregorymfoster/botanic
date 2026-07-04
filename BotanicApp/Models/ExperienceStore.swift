@@ -36,11 +36,6 @@ struct CheckInDraft {
     var note: String = ""
 }
 
-struct ReflectionDraft {
-    var feeling: FeelingWord = .settled
-    var noteToFuture: String = ""
-}
-
 /// Thin action layer over the model context. Reads happen with `@Query` in views; these helpers
 /// perform the writes (and the "first supplement starts an experience" rule).
 @MainActor
@@ -155,11 +150,46 @@ enum ExperienceStore {
         NotificationManager.rescheduleQuietSuggestion(lastEventAt: now)
     }
 
-    /// Closes the experience and applies the end-of-experience reflection.
-    static func end(_ experience: Experience, reflection: ReflectionDraft, in context: ModelContext, now: Date = Date()) {
+    /// Pure mapping from a live experience to the framework-free input the on-device summarizer
+    /// consumes. Called while the experience is still live — the completion screen generates a
+    /// preview from this before the user commits by ending the experience.
+    static func summaryInput(for experience: Experience, asOf now: Date = Date()) -> ExperienceSummaryInput {
+        let checkIns = experience.checkIns.sorted { $0.createdAt < $1.createdAt }
+        let notes = experience.journalEntries
+            .sorted { $0.createdAt < $1.createdAt }
+            .map(\.text)
+        return ExperienceSummaryInput(
+            supplements: experience.loggedSupplements.map(\.name),
+            checkInWords: checkIns.map(\.tags),
+            valenceTrajectory: checkIns.map(\.valence),
+            notes: notes,
+            startedAt: experience.startedAt,
+            duration: experience.duration(asOf: now)
+        )
+    }
+
+    /// Closes the experience with the user-approved title/subtitle/felt-words from the completion
+    /// screen. `endedAt` is set first so the duration used elsewhere is final before the rest of the
+    /// summary is applied.
+    static func end(
+        _ experience: Experience,
+        title: String,
+        subtitle: String?,
+        titleSource: TitleSource,
+        feltWords: [String],
+        in context: ModelContext,
+        now: Date = Date()
+    ) {
         experience.endedAt = now
-        experience.feltSummary = reflection.feeling
-        experience.noteToFuture = cleaned(reflection.noteToFuture)
+        experience.title = title
+        experience.subtitle = cleaned(subtitle ?? "")
+        experience.titleSource = titleSource
+        experience.feltWords = feltWords
+        if let firstWord = feltWords.first {
+            experience.feltSummary = FeelingWord.allCases.first {
+                $0.rawValue.lowercased() == firstWord.lowercased()
+            } ?? experience.feltSummary ?? .settled
+        }
         save(context)
         LiveActivityController.shared.end(liveState(for: experience))
         NotificationManager.cancelReminders()

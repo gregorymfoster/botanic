@@ -2,7 +2,7 @@ name: Botanic
 options:
   bundleIdPrefix: com.gregfoster
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "26.0"
 packages:
   BotanicKit:
     path: BotanicKit
@@ -18,7 +18,7 @@ targets:
   Botanic:
     type: application
     platform: iOS
-    deploymentTarget: "17.0"
+    deploymentTarget: "26.0"
     sources:
       - BotanicApp
     dependencies:

@@ -178,10 +178,17 @@ struct RootView: View {
         }
         .sheet(isPresented: $showingEnd) {
             if let live = liveExperience {
-                EndExperienceView(experience: live) { reflection in
-                    ExperienceStore.end(live, reflection: reflection, in: modelContext)
-                    showingEnd = false
-                }
+                EndExperienceView(
+                    experience: live,
+                    onSave: { title, subtitle, titleSource, feltWords in
+                        ExperienceStore.end(
+                            live, title: title, subtitle: subtitle, titleSource: titleSource,
+                            feltWords: feltWords, in: modelContext
+                        )
+                        showingEnd = false
+                    },
+                    onKeepRunning: { showingEnd = false }
+                )
                 .presentationBackground(.clear)
                 .presentationDetents([.large])
             }
