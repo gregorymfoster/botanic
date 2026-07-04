@@ -10,8 +10,13 @@ enum NotificationManager {
     /// `@AppStorage` keys — keep in sync with `SettingsView`.
     static let enabledKey = "remindersEnabled"
     static let intervalKey = "reminderIntervalMinutes"
+    static let supplementAlertsEnabledKey = "supplementAlertsEnabled"
+    static let quietSuggestEnabledKey = "quietSuggestEnabled"
+    static let quietSuggestHoursKey = "quietSuggestHours"
 
     private static let reminderID = "botanic.checkin.reminder"
+    private static let quietSuggestID = "botanic.quiet"
+    private static func supplementAlertID(_ id: UUID) -> String { "botanic.supplement.\(id.uuidString)" }
 
     /// Reminders default **on** at **90 minutes** (matches the SettingsView `@AppStorage` defaults).
     static var isEnabled: Bool {
@@ -21,6 +26,21 @@ enum NotificationManager {
     static var intervalMinutes: Int {
         let stored = UserDefaults.standard.object(forKey: intervalKey) as? Int
         return stored ?? 90
+    }
+
+    /// Scheduled-supplement alerts default **on**.
+    static var supplementAlertsEnabled: Bool {
+        UserDefaults.standard.object(forKey: supplementAlertsEnabledKey) as? Bool ?? true
+    }
+
+    /// Suggest-ending-after-quiet defaults **on** at a **3 hour** threshold.
+    static var quietSuggestEnabled: Bool {
+        UserDefaults.standard.object(forKey: quietSuggestEnabledKey) as? Bool ?? true
+    }
+
+    static var quietSuggestHours: Int {
+        let stored = UserDefaults.standard.object(forKey: quietSuggestHoursKey) as? Int
+        return stored ?? 3
     }
 
     // MARK: - Authorization
@@ -70,5 +90,73 @@ enum NotificationManager {
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: true)
         let request = UNNotificationRequest(identifier: reminderID, content: content, trigger: trigger)
         center.add(request)
+    }
+
+    // MARK: - Scheduled-supplement alerts
+
+    /// Schedules a one-shot alert for a supplement planned for later. Skips silently if the setting
+    /// is off or `date` has already passed.
+    static func scheduleSupplementAlert(id: UUID, name: String, at date: Date) {
+        guard supplementAlertsEnabled, date > Date() else { return }
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else { return }
+            Task { @MainActor in
+                let content = UNMutableNotificationContent()
+                content.title = "A supplement you planned is due."
+                content.body = "Scheduled: \(name)"
+                content.sound = .default
+
+                let components = Calendar.current.dateComponents(
+                    [.year, .month, .day, .hour, .minute, .second], from: date
+                )
+                let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+                let request = UNNotificationRequest(
+                    identifier: supplementAlertID(id), content: content, trigger: trigger
+                )
+                center.add(request)
+            }
+        }
+    }
+
+    static func cancelSupplementAlert(id: UUID) {
+        UNUserNotificationCenter.current()
+            .removePendingNotificationRequests(withIdentifiers: [supplementAlertID(id)])
+    }
+
+    // MARK: - Suggest ending after quiet
+
+    /// Reschedules the "still going?" suggestion relative to the latest activity in a live
+    /// experience. Cancels any pending suggestion first so only the most recent activity counts.
+    static func rescheduleQuietSuggestion(lastEventAt: Date) {
+        cancelQuietSuggestion()
+        guard quietSuggestEnabled else { return }
+        let fireDate = lastEventAt.addingTimeInterval(TimeInterval(max(1, quietSuggestHours)) * 3600)
+        guard fireDate > Date() else { return }
+
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else { return }
+            Task { @MainActor in
+                let content = UNMutableNotificationContent()
+                content.title = "Still going?"
+                content.body = "If this experience has wound down, you can end it when you're ready."
+                content.sound = .default
+
+                let components = Calendar.current.dateComponents(
+                    [.year, .month, .day, .hour, .minute, .second], from: fireDate
+                )
+                let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+                let request = UNNotificationRequest(
+                    identifier: quietSuggestID, content: content, trigger: trigger
+                )
+                center.add(request)
+            }
+        }
+    }
+
+    static func cancelQuietSuggestion() {
+        UNUserNotificationCenter.current()
+            .removePendingNotificationRequests(withIdentifiers: [quietSuggestID])
     }
 }

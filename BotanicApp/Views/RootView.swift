@@ -11,28 +11,16 @@ struct RootView: View {
     @State private var showingCheckIn = false
     @State private var showingEnd = false
     @State private var showingJournal = false
-    @State private var showingGrounding = false
     @State private var pendingInsights = false
     @State private var didSeed = false
     @State private var historyPath: [Experience] = []
-    @AppStorage("supportPersonNumber") private var supportNumber = ""
 
     private var liveExperience: Experience? {
         experiences.first { $0.endedAt == nil }
     }
 
-    /// One-tap reach-out: dial the support person when one is saved, otherwise open the Grounding
-    /// sheet (which holds the support setup path, emergency services, and the safety copy).
-    private func reachSupport() {
-        if PhoneDialer.canDial(supportNumber) {
-            PhoneDialer.dial(supportNumber)
-        } else {
-            showingGrounding = true
-        }
-    }
-
     /// Launch-argument hooks used only for deterministic screenshots, e.g. `-initialTab history`,
-    /// `-openSheet add|checkin|journal|end|grounding`, and `-openDetail` (most recent experience).
+    /// `-openSheet add|checkin|journal|end`, and `-openDetail` (most recent experience).
     private func applyScreenshotLaunchArgs() {
         let args = ProcessInfo.processInfo.arguments
         if let idx = args.firstIndex(of: "-initialTab"), idx + 1 < args.count {
@@ -61,7 +49,6 @@ struct RootView: View {
                 case "checkin": showingCheckIn = true
                 case "journal": showingJournal = true
                 case "end": showingEnd = true
-                case "grounding": showingGrounding = true
                 default: break
                 }
             }
@@ -85,8 +72,6 @@ struct RootView: View {
                     onAdd: { showingAdd = true },
                     onCheckIn: { showingCheckIn = true },
                     onNote: { showingJournal = true },
-                    onGround: { showingGrounding = true },
-                    onSupport: reachSupport,
                     onEnd: { showingEnd = true }
                 )
             }
@@ -157,10 +142,6 @@ struct RootView: View {
                 }
                 .presentationBackground(.clear)
             }
-        }
-        .sheet(isPresented: $showingGrounding) {
-            GroundingView()
-                .presentationBackground(.clear)
         }
         .sheet(isPresented: $showingEnd) {
             if let live = liveExperience {

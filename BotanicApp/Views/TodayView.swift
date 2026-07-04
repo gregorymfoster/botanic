@@ -6,15 +6,13 @@ struct TodayView: View {
     var onAdd: () -> Void
     var onCheckIn: () -> Void
     var onNote: () -> Void
-    var onGround: () -> Void
-    var onSupport: () -> Void
     var onEnd: () -> Void
 
     var body: some View {
         Group {
             if let live {
                 LiveExperienceView(experience: live, onAdd: onAdd, onCheckIn: onCheckIn,
-                                   onNote: onNote, onGround: onGround, onSupport: onSupport, onEnd: onEnd)
+                                   onNote: onNote, onEnd: onEnd)
             } else {
                 IdleTodayView(onAdd: onAdd)
             }
@@ -83,8 +81,6 @@ private struct LiveExperienceView: View {
     var onAdd: () -> Void
     var onCheckIn: () -> Void
     var onNote: () -> Void
-    var onGround: () -> Void
-    var onSupport: () -> Void
     var onEnd: () -> Void
 
     var body: some View {
@@ -200,8 +196,6 @@ private struct LiveExperienceView: View {
         HStack(spacing: 9) {
             actionButton("Check in", "clock", hint: "Log how right now feels", action: onCheckIn)
             actionButton("Note", "text.alignleft", hint: "Open the journal timeline", action: onNote)
-            actionButton("Ground", "leaf", hint: "Breathing and grounding steps", action: onGround)
-            actionButton("Support", "phone", hint: "Reach your support person", action: onSupport)
         }
     }
 

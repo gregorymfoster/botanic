@@ -3,12 +3,10 @@ import SwiftUI
 
 struct SettingsView: View {
     var experiences: [Experience]
-    @AppStorage("supportPersonName") private var supportName = ""
-    @AppStorage("supportPersonNumber") private var supportNumber = ""
     @AppStorage(NotificationManager.enabledKey) private var remindersEnabled = true
     @AppStorage(NotificationManager.intervalKey) private var reminderIntervalMinutes = 90
 
-    private static let intervalOptions = [60, 90, 120]
+    private static let intervalOptions = [45, 60, 90, 120]
 
     private var finished: [Experience] {
         experiences.filter { $0.endedAt != nil }.sorted { $0.startedAt > $1.startedAt }
@@ -18,24 +16,17 @@ struct SettingsView: View {
         experiences.contains { $0.endedAt == nil }
     }
 
-    /// Bridges the 60/90/120-minute preference to the `SegmentedToggle`'s 0-based index.
+    /// Bridges the 45/60/90/120-minute preference to the `SegmentedToggle`'s 0-based index.
     private var intervalIndex: Binding<Int> {
         Binding(
-            get: { Self.intervalOptions.firstIndex(of: reminderIntervalMinutes) ?? 1 },
+            get: { Self.intervalOptions.firstIndex(of: reminderIntervalMinutes) ?? 2 },
             set: { reminderIntervalMinutes = Self.intervalOptions[$0] }
         )
-    }
-
-    /// Shown once the user starts filling in support details but the number can't be dialed — explains
-    /// why the Grounding Call button stays hidden.
-    private var showsNumberHint: Bool {
-        (!supportName.isEmpty || !supportNumber.isEmpty) && !PhoneDialer.canDial(supportNumber)
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                supportCard
                 remindersCard
                 privacyCard
                 exportAllCard
@@ -46,32 +37,6 @@ struct SettingsView: View {
         .scrollIndicators(.hidden)
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.large)
-    }
-
-    private var supportCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("SUPPORT PERSON")
-                .font(Dusk.sans(10.5, .bold)).tracking(1.6).foregroundStyle(Dusk.pinkSoft.opacity(0.85))
-            Text("Shown on the Grounding screen for one-tap reach-out.")
-                .font(Dusk.sans(12)).foregroundStyle(Dusk.muted(0.5))
-            TextField("", text: $supportName, prompt: Text("Name (e.g. Mara)").foregroundColor(Dusk.muted(0.4)))
-                .font(Dusk.sans(15)).foregroundStyle(Dusk.text)
-                .padding(.horizontal, 14).padding(.vertical, 12)
-                .glassCard(fill: 0.05, cornerRadius: 14)
-            TextField("", text: $supportNumber, prompt: Text("Phone number").foregroundColor(Dusk.muted(0.4)))
-                .font(Dusk.sans(15)).foregroundStyle(Dusk.text)
-                .keyboardType(.phonePad)
-                .padding(.horizontal, 14).padding(.vertical, 12)
-                .glassCard(fill: 0.05, cornerRadius: 14)
-            if showsNumberHint {
-                Label("Add a number we can dial so the Call button appears on Grounding.", systemImage: "info.circle")
-                    .font(Dusk.sans(11.5)).foregroundStyle(Dusk.peachLight.opacity(0.9))
-                    .accessibilityHint("The support Call button needs a dialable number")
-            }
-        }
-        .padding(.horizontal, 17).padding(.vertical, 16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(fill: 0.05, cornerRadius: 20)
     }
 
     private var remindersCard: some View {
@@ -92,7 +57,7 @@ struct SettingsView: View {
             if remindersEnabled {
                 Text("Every")
                     .font(Dusk.sans(12)).foregroundStyle(Dusk.muted(0.5))
-                SegmentedToggle(options: ["60 min", "90 min", "120 min"], selection: intervalIndex)
+                SegmentedToggle(options: ["45 min", "60 min", "90 min", "120 min"], selection: intervalIndex)
                     .onChange(of: reminderIntervalMinutes) { _, _ in
                         NotificationManager.refresh(isLive: hasLiveExperience)
                     }

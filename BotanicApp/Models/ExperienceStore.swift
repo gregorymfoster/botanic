@@ -72,6 +72,10 @@ enum ExperienceStore {
         updateLibrary(for: entry.name, draft: draft, at: entry.effectiveTime, in: context)
         save(context)
         syncLiveActivity(for: experience)
+        if scheduled, let scheduledFor = entry.scheduledFor {
+            NotificationManager.scheduleSupplementAlert(id: entry.id, name: entry.name, at: scheduledFor)
+        }
+        NotificationManager.rescheduleQuietSuggestion(lastEventAt: now)
         return experience
     }
 
@@ -104,6 +108,7 @@ enum ExperienceStore {
         let experience = Experience(title: defaultTitle(for: now), startedAt: now)
         context.insert(experience)
         NotificationManager.scheduleRemindersIfEnabled()
+        NotificationManager.rescheduleQuietSuggestion(lastEventAt: now)
         return experience
     }
 
@@ -120,6 +125,7 @@ enum ExperienceStore {
         context.insert(checkIn)
         save(context)
         LiveActivityController.shared.update(liveState(for: experience))
+        NotificationManager.rescheduleQuietSuggestion(lastEventAt: now)
     }
 
     static func addJournalEntry(text: String, kind: JournalKind, prompt: String?,
@@ -131,6 +137,7 @@ enum ExperienceStore {
         context.insert(entry)
         save(context)
         LiveActivityController.shared.update(liveState(for: experience))
+        NotificationManager.rescheduleQuietSuggestion(lastEventAt: now)
     }
 
     /// Closes the experience and applies the end-of-experience reflection.
@@ -141,10 +148,17 @@ enum ExperienceStore {
         save(context)
         LiveActivityController.shared.end(liveState(for: experience))
         NotificationManager.cancelReminders()
+        NotificationManager.cancelQuietSuggestion()
+        for entry in experience.scheduledSupplements {
+            NotificationManager.cancelSupplementAlert(id: entry.id)
+        }
     }
 
     /// Permanently removes an experience and its cascaded supplements, check-ins, and journal entries.
     static func delete(_ experience: Experience, in context: ModelContext) {
+        for entry in experience.scheduledSupplements {
+            NotificationManager.cancelSupplementAlert(id: entry.id)
+        }
         context.delete(experience)
         save(context)
     }

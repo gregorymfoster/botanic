@@ -31,7 +31,7 @@ automatically, `scripts/install-hooks.sh` wires `pre-commit → check.sh --fast`
 
 > Screenshot note: capturing `NavigationStack`-backed tabs (History, Settings, and pushed Insights/
 > Detail) via `simctl io screenshot` currently renders blank on the Xcode 26 simulator; sheet-based
-> screens (Add, Journal, Grounding, etc.) capture fine. Verify those tabs by manual navigation.
+> screens (Add, Journal, etc.) capture fine. Verify those tabs by manual navigation.
 
 ## Change Notes
 
@@ -53,6 +53,6 @@ automatically, `scripts/install-hooks.sh` wires `pre-commit → check.sh --fast`
 
 ## Product Guardrails
 
-- Botanic is a descriptive journal. Copy never advises doses, never recommends substances, and the
-  Grounding screen always offers emergency services. Keep insights descriptive ("evenings with X
-  tended to feel calmer"), never prescriptive.
+- Botanic is a descriptive journal, not a source of medical advice. Copy never advises doses, never
+  recommends substances, and stays descriptive rather than prescriptive. Keep insights descriptive
+  ("evenings with X tended to feel calmer"), never prescriptive.
