@@ -68,7 +68,7 @@ struct HistoryView: View {
                     }
                     .onDelete { offsets in
                         for index in offsets {
-                            ExperienceStore.delete(finished[index], in: modelContext)
+                            ExperienceStore.live.delete(finished[index], in: modelContext)
                         }
                     }
                 }
@@ -109,7 +109,7 @@ struct HistoryView: View {
             Button("Cancel", role: .cancel) {}
             Button("Save") {
                 if let exp = renamingExperience {
-                    ExperienceStore.rename(exp, to: renameDraft, in: modelContext)
+                    ExperienceStore.live.rename(exp, to: renameDraft, in: modelContext)
                 }
                 renamingExperience = nil
             }
@@ -117,7 +117,7 @@ struct HistoryView: View {
         .confirmationDialog("Delete this experience?", isPresented: deleteBinding, titleVisibility: .visible) {
             Button("Delete experience", role: .destructive) {
                 if let exp = deletingExperience {
-                    ExperienceStore.delete(exp, in: modelContext)
+                    ExperienceStore.live.delete(exp, in: modelContext)
                 }
                 deletingExperience = nil
             }

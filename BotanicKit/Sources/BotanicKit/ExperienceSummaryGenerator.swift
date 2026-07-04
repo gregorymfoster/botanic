@@ -73,13 +73,7 @@ public struct DeterministicExperienceSummarizer: ExperienceSummarizing {
     // MARK: - Time of day
 
     private static func timeOfDayWord(for date: Date, calendar: Calendar) -> String {
-        let hour = calendar.component(.hour, from: date)
-        switch hour {
-        case 5..<12: return "morning"
-        case 12..<17: return "afternoon"
-        case 17..<21: return "evening"
-        default: return "night"
-        }
+        TimeOfDay(date: date, calendar: calendar).summaryWord
     }
 
     // MARK: - Trajectory

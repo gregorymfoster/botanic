@@ -343,7 +343,7 @@ struct EndExperienceView: View {
             from: experience.checkIns.sorted { $0.createdAt < $1.createdAt }.map(\.tags),
             limit: 3
         )
-        let input = ExperienceStore.summaryInput(for: experience)
+        let input = ExperienceStore.live.summaryInput(for: experience)
         let generator = summarizer
         generationTask = Task {
             let output: ExperienceSummaryOutput

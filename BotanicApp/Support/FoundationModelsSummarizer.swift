@@ -56,14 +56,7 @@ public struct OnDeviceExperienceSummarizer: ExperienceSummarizing {
     """
 
     private static func prompt(for input: ExperienceSummaryInput) -> String {
-        let timeOfDay: String
-        let hour = input.calendar.component(.hour, from: input.startedAt)
-        switch hour {
-        case 5..<12: timeOfDay = "morning"
-        case 12..<17: timeOfDay = "afternoon"
-        case 17..<21: timeOfDay = "evening"
-        default: timeOfDay = "night"
-        }
+        let timeOfDay = TimeOfDay(date: input.startedAt, calendar: input.calendar).summaryWord
 
         var lines: [String] = []
         lines.append("Time of day: \(timeOfDay)")

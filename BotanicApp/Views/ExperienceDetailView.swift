@@ -63,7 +63,7 @@ struct ExperienceDetailView: View {
         }
         .confirmationDialog("Delete this experience?", isPresented: $showingDeleteConfirm, titleVisibility: .visible) {
             Button("Delete experience", role: .destructive) {
-                ExperienceStore.delete(experience, in: modelContext)
+                ExperienceStore.live.delete(experience, in: modelContext)
                 dismiss()
             }
             Button("Keep", role: .cancel) {}
@@ -167,7 +167,7 @@ struct ExperienceDetailView: View {
     }
 
     private func commitTitleEdit() {
-        ExperienceStore.updateSummary(experience, title: titleDraft, subtitle: subtitleDraft, in: modelContext)
+        ExperienceStore.live.updateSummary(experience, title: titleDraft, subtitle: subtitleDraft, in: modelContext)
         isEditingTitle = false
     }
 
@@ -255,7 +255,7 @@ struct ExperienceDetailView: View {
 
     private func commitSupplementDraft(for entry: SupplementEntry) {
         guard let draft = supplementDrafts[entry.id] else { return }
-        ExperienceStore.updateSupplement(entry, howTaking: draft.howTaking, takenAt: draft.takenAt, in: modelContext)
+        ExperienceStore.live.updateSupplement(entry, howTaking: draft.howTaking, takenAt: draft.takenAt, in: modelContext)
     }
 
     private func dotColor(_ index: Int) -> Color {
@@ -307,7 +307,7 @@ struct ExperienceDetailView: View {
     }
 
     private func commitNoteEdit() {
-        ExperienceStore.updateNoteToFuture(experience, note: noteDraft, in: modelContext)
+        ExperienceStore.live.updateNoteToFuture(experience, note: noteDraft, in: modelContext)
         isEditingNote = false
     }
 
@@ -358,7 +358,7 @@ struct ExperienceDetailView: View {
     }
 
     private var markdown: String {
-        MarkdownExport.experience(experience)
+        MarkdownExport.experience(experience.markdownExportInput())
     }
 
     /// Shares the experience's markdown as a real file when a temp copy can be written (so the share

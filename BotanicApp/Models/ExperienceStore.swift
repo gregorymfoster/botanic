@@ -1,5 +1,7 @@
 import BotanicKit
 import Foundation
+import OSLog
+import Sentry
 import SwiftData
 
 /// Value-type drafts edited by the sheets, then applied on save (mirrors Breathwork's
@@ -38,10 +40,35 @@ struct CheckInDraft {
 
 /// Thin action layer over the model context. Reads happen with `@Query` in views; these helpers
 /// perform the writes (and the "first supplement starts an experience" rule).
+///
+/// Side effects (Live Activity updates, local notification scheduling, markdown mirroring) are
+/// injected via narrow protocols (see `ExperienceStoreDependencies.swift`) so this type can be
+/// exercised in unit tests without ActivityKit/UserNotifications/FileManager. `ExperienceStore.live`
+/// is the shared production instance views call into.
 @MainActor
-enum ExperienceStore {
+struct ExperienceStore {
+    private static let logger = Logger(subsystem: "com.botanic.app", category: "ExperienceStore")
+
+    /// The shared production instance — wired to the real Live Activity, notification, and
+    /// markdown mirror implementations. Views call `ExperienceStore.live.addSupplement(...)` etc.
+    static let live = ExperienceStore()
+
+    var liveActivity: any LiveActivityUpdating
+    var notifications: any NotificationScheduling
+    var markdownMirror: any MarkdownMirroring
+
+    init(
+        liveActivity: (any LiveActivityUpdating)? = nil,
+        notifications: (any NotificationScheduling)? = nil,
+        markdownMirror: (any MarkdownMirroring)? = nil
+    ) {
+        self.liveActivity = liveActivity ?? LiveActivityController.shared
+        self.notifications = notifications ?? LiveNotificationScheduler()
+        self.markdownMirror = markdownMirror ?? LiveMarkdownMirror()
+    }
+
     /// The single live experience, if any.
-    static func liveExperience(in context: ModelContext) -> Experience? {
+    func liveExperience(in context: ModelContext) -> Experience? {
         var descriptor = FetchDescriptor<Experience>(
             predicate: #Predicate { $0.endedAt == nil },
             sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
@@ -63,14 +90,14 @@ enum ExperienceStore {
     /// Adds a supplement. With no live experience, this starts one (the core "first supplement
     /// begins an experience" rule). Returns the experience the entry landed in.
     @discardableResult
-    static func addSupplement(_ draft: SupplementDraft, in context: ModelContext, now: Date = Date()) -> Experience {
-        let experience = liveExperience(in: context) ?? startExperience(in: context, now: now)
+    func addSupplement(_ draft: SupplementDraft, in context: ModelContext, now: Date = Date(), calendar: Calendar = .current) -> Experience {
+        let experience = liveExperience(in: context) ?? startExperience(in: context, now: now, calendar: calendar)
 
         let scheduled = draft.scheduleForLater
         let entry = SupplementEntry(
             name: draft.name.trimmingCharacters(in: .whitespacesAndNewlines),
-            howTaking: cleaned(draft.howTaking),
-            intention: cleaned(draft.intention),
+            howTaking: Self.cleaned(draft.howTaking),
+            intention: Self.cleaned(draft.intention),
             takenAt: scheduled ? nil : now,
             scheduledFor: scheduled ? draft.scheduledFor : nil,
             status: scheduled ? .scheduled : .taken,
@@ -79,33 +106,33 @@ enum ExperienceStore {
         entry.experience = experience
         context.insert(entry)
         updateLibrary(for: entry.name, draft: draft, at: entry.effectiveTime, in: context)
-        save(context)
+        Self.save(context)
         syncLiveActivity(for: experience)
         if scheduled, let scheduledFor = entry.scheduledFor {
-            NotificationManager.scheduleSupplementAlert(id: entry.id, name: entry.name, at: scheduledFor)
+            notifications.scheduleSupplementAlert(id: entry.id, name: entry.name, at: scheduledFor)
         }
-        NotificationManager.rescheduleQuietSuggestion(lastEventAt: now)
+        notifications.rescheduleQuietSuggestion(lastEventAt: now)
         return experience
     }
 
     /// Upserts the remembered-supplement library entry so future logging can prefill the last
     /// amount and intention used for this supplement. Matches by trimmed, case-insensitive name.
-    private static func updateLibrary(for name: String, draft: SupplementDraft, at loggedAt: Date, in context: ModelContext) {
+    private func updateLibrary(for name: String, draft: SupplementDraft, at loggedAt: Date, in context: ModelContext) {
         let descriptor = FetchDescriptor<SupplementLibraryItem>()
         let existing = (try? context.fetch(descriptor))?.first {
             $0.name.compare(name, options: .caseInsensitive) == .orderedSame
         }
 
         if let item = existing {
-            item.lastAmount = cleaned(draft.howTaking)
-            item.lastIntention = cleaned(draft.intention)
+            item.lastAmount = Self.cleaned(draft.howTaking)
+            item.lastIntention = Self.cleaned(draft.intention)
             item.useCount += 1
             item.lastUsedAt = loggedAt
         } else {
             let item = SupplementLibraryItem(
                 name: name,
-                lastAmount: cleaned(draft.howTaking),
-                lastIntention: cleaned(draft.intention),
+                lastAmount: Self.cleaned(draft.howTaking),
+                lastIntention: Self.cleaned(draft.intention),
                 useCount: 1,
                 lastUsedAt: loggedAt
             )
@@ -113,15 +140,15 @@ enum ExperienceStore {
         }
     }
 
-    static func startExperience(in context: ModelContext, now: Date = Date()) -> Experience {
-        let experience = Experience(title: defaultTitle(for: now), startedAt: now)
+    func startExperience(in context: ModelContext, now: Date = Date(), calendar: Calendar = .current) -> Experience {
+        let experience = Experience(title: Self.defaultTitle(for: now, calendar: calendar), startedAt: now)
         context.insert(experience)
-        NotificationManager.scheduleRemindersIfEnabled()
-        NotificationManager.rescheduleQuietSuggestion(lastEventAt: now)
+        notifications.scheduleRemindersIfEnabled()
+        notifications.rescheduleQuietSuggestion(lastEventAt: now)
         return experience
     }
 
-    static func addCheckIn(_ draft: CheckInDraft, to experience: Experience, in context: ModelContext, now: Date = Date()) {
+    func addCheckIn(_ draft: CheckInDraft, to experience: Experience, in context: ModelContext, now: Date = Date()) {
         let checkIn = CheckIn(
             createdAt: now,
             valence: draft.valence,
@@ -129,31 +156,31 @@ enum ExperienceStore {
             bodyLoad: draft.bodyLoad,
             feeling: draft.feeling,
             tags: Array(draft.tags).sorted(),
-            note: cleaned(draft.note)
+            note: Self.cleaned(draft.note)
         )
         checkIn.experience = experience
         context.insert(checkIn)
-        save(context)
-        LiveActivityController.shared.update(liveState(for: experience))
-        NotificationManager.rescheduleQuietSuggestion(lastEventAt: now)
+        Self.save(context)
+        liveActivity.update(Self.liveState(for: experience))
+        notifications.rescheduleQuietSuggestion(lastEventAt: now)
     }
 
-    static func addJournalEntry(text: String, kind: JournalKind, prompt: String?,
-                                to experience: Experience, in context: ModelContext, now: Date = Date()) {
+    func addJournalEntry(text: String, kind: JournalKind, prompt: String?,
+                          to experience: Experience, in context: ModelContext, now: Date = Date()) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let entry = JournalEntry(createdAt: now, kind: kind, text: trimmed, prompt: prompt)
         entry.experience = experience
         context.insert(entry)
-        save(context)
-        LiveActivityController.shared.update(liveState(for: experience))
-        NotificationManager.rescheduleQuietSuggestion(lastEventAt: now)
+        Self.save(context)
+        liveActivity.update(Self.liveState(for: experience))
+        notifications.rescheduleQuietSuggestion(lastEventAt: now)
     }
 
     /// Pure mapping from a live experience to the framework-free input the on-device summarizer
     /// consumes. Called while the experience is still live — the completion screen generates a
     /// preview from this before the user commits by ending the experience.
-    static func summaryInput(for experience: Experience, asOf now: Date = Date()) -> ExperienceSummaryInput {
+    func summaryInput(for experience: Experience, asOf now: Date = Date()) -> ExperienceSummaryInput {
         let checkIns = experience.checkIns.sorted { $0.createdAt < $1.createdAt }
         let notes = experience.journalEntries
             .sorted { $0.createdAt < $1.createdAt }
@@ -171,7 +198,7 @@ enum ExperienceStore {
     /// Closes the experience with the user-approved title/subtitle/felt-words from the completion
     /// screen. `endedAt` is set first so the duration used elsewhere is final before the rest of the
     /// summary is applied.
-    static func end(
+    func end(
         _ experience: Experience,
         title: String,
         subtitle: String?,
@@ -182,7 +209,7 @@ enum ExperienceStore {
     ) {
         experience.endedAt = now
         experience.title = title
-        experience.subtitle = cleaned(subtitle ?? "")
+        experience.subtitle = Self.cleaned(subtitle ?? "")
         experience.titleSource = titleSource
         experience.feltWords = feltWords
         if let firstWord = feltWords.first {
@@ -190,66 +217,66 @@ enum ExperienceStore {
                 $0.rawValue.lowercased() == firstWord.lowercased()
             } ?? experience.feltSummary ?? .settled
         }
-        save(context)
-        LiveActivityController.shared.end(liveState(for: experience))
-        NotificationManager.cancelReminders()
-        NotificationManager.cancelQuietSuggestion()
+        Self.save(context)
+        liveActivity.end(Self.liveState(for: experience))
+        notifications.cancelReminders()
+        notifications.cancelQuietSuggestion()
         for entry in experience.scheduledSupplements {
-            NotificationManager.cancelSupplementAlert(id: entry.id)
+            notifications.cancelSupplementAlert(id: entry.id)
         }
-        MarkdownMirrorService.sync(experience, in: context)
+        markdownMirror.sync(experience, in: context)
     }
 
     /// Permanently removes an experience and its cascaded supplements, check-ins, and journal entries.
-    static func delete(_ experience: Experience, in context: ModelContext) {
+    func delete(_ experience: Experience, in context: ModelContext) {
         for entry in experience.scheduledSupplements {
-            NotificationManager.cancelSupplementAlert(id: entry.id)
+            notifications.cancelSupplementAlert(id: entry.id)
         }
         context.delete(experience)
-        save(context)
+        Self.save(context)
     }
 
     /// Renames an experience from History's swipe action or the detail screen's title edit. Marks
     /// the title as user-authored so it's never silently overwritten by a future on-device draft.
-    static func rename(_ experience: Experience, to title: String, in context: ModelContext) {
+    func rename(_ experience: Experience, to title: String, in context: ModelContext) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         experience.title = trimmed
         experience.titleSource = .user
-        save(context)
-        MarkdownMirrorService.sync(experience, in: context)
+        Self.save(context)
+        markdownMirror.sync(experience, in: context)
     }
 
     /// Commits an edit to an experience's title and/or subtitle from the detail screen. Either value
     /// may be left unchanged by passing the experience's current value. Marks the title as
     /// user-authored, matching `rename(_:to:in:)`.
-    static func updateSummary(_ experience: Experience, title: String, subtitle: String?, in context: ModelContext) {
+    func updateSummary(_ experience: Experience, title: String, subtitle: String?, in context: ModelContext) {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedTitle.isEmpty {
             experience.title = trimmedTitle
             experience.titleSource = .user
         }
-        experience.subtitle = cleaned(subtitle ?? "")
-        save(context)
-        MarkdownMirrorService.sync(experience, in: context)
+        experience.subtitle = Self.cleaned(subtitle ?? "")
+        Self.save(context)
+        markdownMirror.sync(experience, in: context)
     }
 
     /// Updates the amount/time on a single supplement entry from the detail screen's inline edit.
-    static func updateSupplement(_ entry: SupplementEntry, howTaking: String, takenAt: Date, in context: ModelContext) {
-        entry.howTaking = cleaned(howTaking)
+    func updateSupplement(_ entry: SupplementEntry, howTaking: String, takenAt: Date, in context: ModelContext) {
+        entry.howTaking = Self.cleaned(howTaking)
         entry.takenAt = takenAt
-        save(context)
+        Self.save(context)
         if let experience = entry.experience {
-            MarkdownMirrorService.sync(experience, in: context)
+            markdownMirror.sync(experience, in: context)
         }
     }
 
     /// Sets or clears the "note to future me" from the detail screen's inline edit. An empty string
     /// clears the note (stored as `nil`).
-    static func updateNoteToFuture(_ experience: Experience, note: String, in context: ModelContext) {
-        experience.noteToFuture = cleaned(note)
-        save(context)
-        MarkdownMirrorService.sync(experience, in: context)
+    func updateNoteToFuture(_ experience: Experience, note: String, in context: ModelContext) {
+        experience.noteToFuture = Self.cleaned(note)
+        Self.save(context)
+        markdownMirror.sync(experience, in: context)
     }
 
     // MARK: - Insights bridge
@@ -311,14 +338,14 @@ enum ExperienceStore {
     /// Ensures a Live Activity is running for an experience that's still live at launch — after first
     /// re-attaching to any activity from a previous run (`adopt`), this re-creates one if none
     /// survived (force-quit, expiry). Safe to call repeatedly; `start` updates rather than duplicates.
-    static func resumeLiveActivity(for experience: Experience) {
+    func resumeLiveActivity(for experience: Experience) {
         syncLiveActivity(for: experience)
     }
 
     /// Starts (or refreshes) the Live Activity for a live experience. Closed experiences are a no-op.
-    private static func syncLiveActivity(for experience: Experience) {
+    private func syncLiveActivity(for experience: Experience) {
         guard experience.isLive else { return }
-        LiveActivityController.shared.start(experienceID: experience.id, state: liveState(for: experience))
+        liveActivity.start(experienceID: experience.id, state: Self.liveState(for: experience))
     }
 
     /// Maps a SwiftData `Experience` to the framework-free `ContentState` the widget renders —
@@ -341,17 +368,18 @@ enum ExperienceStore {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    private static func defaultTitle(for date: Date) -> String {
-        let hour = Calendar.current.component(.hour, from: date)
-        switch hour {
-        case 5..<12: return "Slow morning"
-        case 12..<17: return "Afternoon"
-        case 17..<22: return "Evening at home"
-        default: return "Late night"
-        }
+    private static func defaultTitle(for date: Date, calendar: Calendar = .current) -> String {
+        TimeOfDay.defaultExperienceTitle(for: date, calendar: calendar)
     }
 
     private static func save(_ context: ModelContext) {
-        do { try context.save() } catch { /* SwiftData autosaves; explicit save is best-effort */ }
+        do {
+            try context.save()
+        } catch {
+            // SwiftData autosaves; explicit save is best-effort, but a failure here is worth
+            // knowing about — log locally and report to Sentry rather than swallowing silently.
+            logger.error("Failed to save model context: \(error.localizedDescription)")
+            SentrySDK.capture(error: error)
+        }
     }
 }

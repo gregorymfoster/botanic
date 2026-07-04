@@ -123,7 +123,7 @@ struct RootView: View {
         // launches): re-attach to any surviving activity, then ensure one is running.
         .task(id: liveExperience?.id) {
             LiveActivityController.shared.adopt(liveExperienceID: liveExperience?.id)
-            if let live = liveExperience { ExperienceStore.resumeLiveActivity(for: live) }
+            if let live = liveExperience { ExperienceStore.live.resumeLiveActivity(for: live) }
         }
         .onOpenURL { url in
             // botanic://checkin — opened from the Live Activity's "Check in" affordance.
@@ -133,7 +133,7 @@ struct RootView: View {
         }
         .sheet(isPresented: $showingAdd, onDismiss: { addPrefill = nil }) {
             AddSupplementView(hasLiveExperience: liveExperience != nil, initialDraft: addPrefill) { draft in
-                let experience = ExperienceStore.addSupplement(draft, in: modelContext)
+                let experience = ExperienceStore.live.addSupplement(draft, in: modelContext)
                 pendingBloom = BloomEvent(
                     kind: .supplement(draft.name.trimmingCharacters(in: .whitespacesAndNewlines)),
                     savedAt: Date(),
@@ -147,7 +147,7 @@ struct RootView: View {
         .sheet(isPresented: $showingCheckIn) {
             if let live = liveExperience {
                 CheckInView(experience: live) { draft in
-                    ExperienceStore.addCheckIn(draft, to: live, in: modelContext)
+                    ExperienceStore.live.addCheckIn(draft, to: live, in: modelContext)
                     pendingBloom = BloomEvent(
                         kind: .checkIn(draft.feeling.rawValue),
                         savedAt: Date(),
@@ -162,7 +162,7 @@ struct RootView: View {
         .sheet(isPresented: $showingNote) {
             if let live = liveExperience {
                 NoteView(experience: live) { text, kind, prompt in
-                    ExperienceStore.addJournalEntry(text: text, kind: kind, prompt: prompt,
+                    ExperienceStore.live.addJournalEntry(text: text, kind: kind, prompt: prompt,
                                                     to: live, in: modelContext)
                     pendingBloom = BloomEvent(
                         kind: .note,
@@ -181,7 +181,7 @@ struct RootView: View {
                 EndExperienceView(
                     experience: live,
                     onSave: { title, subtitle, titleSource, feltWords in
-                        ExperienceStore.end(
+                        ExperienceStore.live.end(
                             live, title: title, subtitle: subtitle, titleSource: titleSource,
                             feltWords: feltWords, in: modelContext
                         )

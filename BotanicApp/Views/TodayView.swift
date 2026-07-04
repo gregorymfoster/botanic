@@ -39,14 +39,8 @@ private struct IdleTodayView: View {
     private var recentItems: [SupplementLibraryItem] { Array(libraryItems.prefix(2)) }
 
     private var dayPart: String {
-        let hour = Calendar.current.component(.hour, from: Date())
         let weekday = Date().formatted(.dateTime.weekday(.wide))
-        let part = switch hour {
-        case 5..<12: "morning"
-        case 12..<17: "afternoon"
-        case 17..<22: "evening"
-        default: "night"
-        }
+        let part = TimeOfDay(date: Date()).todayGreetingWord
         return "\(weekday) \(part)"
     }
 

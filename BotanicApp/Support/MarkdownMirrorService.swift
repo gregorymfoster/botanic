@@ -3,6 +3,47 @@ import Foundation
 import OSLog
 import SwiftData
 
+extension Experience {
+    /// Bridges this SwiftData model into the framework-free input `MarkdownExport` (in BotanicKit)
+    /// renders from — the kit can't see `@Model` types, so this is the one place that maps them.
+    func markdownExportInput(asOf now: Date = Date()) -> MarkdownExportInput {
+        MarkdownExportInput(
+            title: title,
+            subtitle: subtitle,
+            startedAt: startedAt,
+            duration: duration(asOf: now),
+            feltWords: feltWords,
+            feltSummary: feltSummary,
+            supplements: supplements.map { s in
+                MarkdownExportInput.Supplement(
+                    name: s.name,
+                    howTaking: s.howTaking,
+                    intention: s.intention,
+                    // `MarkdownExport` shows "scheduled" when this is nil; pass the same
+                    // taken-or-scheduled fallback the original inline builder used.
+                    takenAt: s.takenAt ?? s.scheduledFor,
+                    effectiveTime: s.effectiveTime
+                )
+            },
+            checkIns: checkIns.map { c in
+                MarkdownExportInput.CheckIn(
+                    createdAt: c.createdAt,
+                    valence: c.valence,
+                    intensity: c.intensity,
+                    bodyLoad: c.bodyLoad,
+                    feeling: c.feeling,
+                    tags: c.tags,
+                    note: c.note
+                )
+            },
+            journalEntries: journalEntries.map { j in
+                MarkdownExportInput.JournalEntry(createdAt: j.createdAt, text: j.text)
+            },
+            noteToFuture: noteToFuture
+        )
+    }
+}
+
 /// Mirrors finished experiences to a user-chosen folder as Markdown files, and builds the "Export
 /// everything as .zip" archive. Preferences live in `UserDefaults`, matching `NotificationManager`'s
 /// shape — Settings binds to the same keys via `@AppStorage`, and this enum reads them directly.
@@ -83,7 +124,7 @@ enum MarkdownMirrorService {
         let desired = MarkdownFileNaming.filename(date: experience.startedAt, title: experience.title, pattern: pattern)
         let finalName = MarkdownFileNaming.resolveCollision(desired, existing: existingNames)
 
-        let markdown = MarkdownExport.experience(experience)
+        let markdown = MarkdownExport.experience(experience.markdownExportInput())
         let destination = folder.appendingPathComponent(finalName)
 
         guard writeCoordinated(markdown, to: destination) else { return }
@@ -115,7 +156,7 @@ enum MarkdownMirrorService {
         let name = experience.markdownFilename
             ?? MarkdownFileNaming.filename(date: experience.startedAt, title: experience.title, pattern: pattern)
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
-        let markdown = MarkdownExport.experience(experience)
+        let markdown = MarkdownExport.experience(experience.markdownExportInput())
         do {
             try markdown.write(to: url, atomically: true, encoding: .utf8)
             return url
@@ -141,7 +182,7 @@ enum MarkdownMirrorService {
             let name = experience.markdownFilename
                 ?? MarkdownFileNaming.filename(date: experience.startedAt, title: experience.title, pattern: pattern)
             let fileURL = folderURL.appendingPathComponent(name)
-            let markdown = MarkdownExport.experience(experience)
+            let markdown = MarkdownExport.experience(experience.markdownExportInput())
             try markdown.write(to: fileURL, atomically: true, encoding: .utf8)
         }
 

@@ -17,17 +17,38 @@
 xcodegen generate
 swift test --package-path BotanicKit
 xcodebuild -project Botanic.xcodeproj -scheme Botanic -destination 'generic/platform=iOS Simulator' build
+xcodebuild test -project Botanic.xcodeproj -scheme Botanic -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max'
 ```
+
+## Tests
+
+- **BotanicKit tests** (`BotanicKit/Tests/BotanicKitTests`, run as target `BotanicKitTests`): framework-free
+  package tests. Fastest path: `swift test --package-path BotanicKit`.
+- **BotanicAppTests** (`BotanicAppTests/`): app-hosted unit test bundle (`@testable import Botanic`),
+  wired as a hosted test target (`TEST_HOST`/`BUNDLE_LOADER` pointed at the `Botanic.app` binary) so it
+  can exercise SwiftData models, stores, and other app-target code that can't move into BotanicKit.
+  Currently just a smoke test (`BotanicAppTestsSmoke.swift`) — add real coverage here for
+  view-model/store logic that lives in the app target.
+- **`Botanic` scheme's test action** runs both `BotanicKitTests` and `BotanicAppTests` with
+  `gatherCoverageData: true`. Invoke directly with:
+  ```sh
+  xcodebuild test -project Botanic.xcodeproj -scheme Botanic -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max'
+  ```
 
 ## Local Verify Gate
 
 There is no cloud CI — `scripts/check.sh` is the canonical "is it safe to commit/release?" gate.
 
 ```sh
-scripts/check.sh            # full: package tests → xcodegen → simulator build (+ swiftlint if configured)
+scripts/check.sh            # full: package tests → xcodegen → simulator build+test (BotanicKitTests + BotanicAppTests) (+ swiftlint if configured)
 scripts/check.sh --fast     # package tests only — the inner dev loop
-scripts/check.sh --release  # full gate plus a clean build, before tagging a release
+scripts/check.sh --release  # full gate, with a clean build+test, before tagging a release
 ```
+
+`check.sh`'s full and `--release` modes now run `xcodebuild test` (not just `build`) against the
+`Botanic` scheme, so both the `BotanicKitTests` and `BotanicAppTests` bundles execute on every full
+gate run, piped through `xcbeautify` when it's installed. `--fast` still only runs the BotanicKit
+package tests, for a quick inner loop.
 
 Run the full gate before committing and the `--release` gate before releasing. To enforce it
 automatically, `scripts/install-hooks.sh` wires `pre-commit → check.sh --fast` and
@@ -36,6 +57,25 @@ automatically, `scripts/install-hooks.sh` wires `pre-commit → check.sh --fast`
 > Screenshot note: capturing `NavigationStack`-backed tabs (History, Settings, and pushed Insights/
 > Detail) via `simctl io screenshot` currently renders blank on the Xcode 26 simulator; sheet-based
 > screens (Add, Journal, etc.) capture fine. Verify those tabs by manual navigation.
+
+## Deterministic Launch Args
+
+For agent-driven screenshots and manual verification, the app supports launch arguments that seed
+data and jump straight to a known state:
+
+- `-seedSampleData` (`BotanicApp/Support/SampleData.swift`): seeds a body of finished experiences
+  plus one live experience, but only if there are no existing experiences.
+- `-seedSampleHistory` (`BotanicApp/Support/SampleData.swift`): seeds only finished experiences, so
+  Today stays idle. Also only applies when there are no existing experiences.
+- `-initialTab <today|history|settings|insights>` (`BotanicApp/Views/RootView.swift`): selects the
+  starting tab. `insights` selects History and then opens the Insights push after a short delay.
+- `-openSheet <add|checkin|journal|note|end>` (`BotanicApp/Views/RootView.swift`): opens the named
+  sheet shortly after launch (`journal` and `note` both open the note sheet).
+- `-openDetail` (`BotanicApp/Views/RootView.swift`): selects History and pushes the most recently
+  finished experience's detail view.
+
+These are read from `ProcessInfo.processInfo.arguments` and are only meant for screenshots/manual
+QA — they're not a general-purpose testing seam (see `BotanicAppTests` for that).
 
 ## Change Notes
 
@@ -58,6 +98,32 @@ automatically, `scripts/install-hooks.sh` wires `pre-commit → check.sh --fast`
 - **No force-unwraps in app code.** Avoid `!`, `try!`, `as!`; handle the `nil`/throwing path.
 - **Accessibility is a quality bar.** VoiceOver labels on controls and the orbs, Dynamic Type
   support, and nothing critical conveyed by color or motion alone (respect Reduce Motion).
+
+## Sentry (crash/error reporting)
+
+- The Sentry Cocoa SDK (`Sentry` package, `sentry-cocoa`) is a dependency of the `Botanic` app
+  target only — not `BotanicWidgets`, not `BotanicKit`.
+- `SentrySDK.start` is called at the top of `BotanicApp.init()` (`BotanicApp/BotanicApp.swift`),
+  before the app's other setup calls. The DSN is inlined in code (Sentry DSNs are not secret — they
+  only allow submitting events to the project, not reading data).
+- `options.environment` is `"debug"` in Debug builds and `"production"` in Release builds.
+  `options.tracesSampleRate` is `0.2`.
+- **dSYM upload**: after archiving for release, upload debug symbols so stack traces symbolicate:
+  ```sh
+  SENTRY_AUTH_TOKEN=<token> scripts/upload-dsyms.sh [path/to/App.xcarchive]
+  ```
+  Defaults to the newest `*.xcarchive` under `build/` if no path is given. Requires `sentry-cli`
+  (`brew install getsentry/tools/sentry-cli`) and a `SENTRY_AUTH_TOKEN` with permission to upload to
+  the `gregorymfoster`/`botanic` Sentry project.
+
+## Untested / Unverifiable Surfaces
+
+- **`BotanicWidgets`** (the WidgetKit extension and Live Activity): no test target. WidgetKit
+  timelines and Live Activities are difficult to unit test and are currently only verified by manual
+  device/simulator inspection.
+- **ActivityKit and UserNotifications glue** (Live Activity start/update/end, local notification
+  scheduling in `NotificationManager`): these wrap device-only system frameworks and aren't
+  exercised by `BotanicAppTests` or `BotanicKitTests`. Verify by hand on a real device/simulator run.
 
 ## Product Guardrails
 

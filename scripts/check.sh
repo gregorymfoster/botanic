@@ -48,25 +48,32 @@ command -v xcodegen >/dev/null 2>&1 || fail "xcodegen not found (brew install xc
 xcodegen generate >/dev/null || fail "xcodegen generate failed"
 green "✓ project generated"
 
-# --- 3. build the app -------------------------------------------------------
-BUILD_ACTION="build"
-[ "$MODE" = "release" ] && BUILD_ACTION="clean build"
-step "Build app — xcodebuild $BUILD_ACTION (iOS Simulator)"
+# --- 3. build + test the app ------------------------------------------------
+# `xcodebuild test` implies a build, so this covers both. --release additionally cleans first.
+BUILD_ACTION="test"
+[ "$MODE" = "release" ] && BUILD_ACTION="clean test"
+step "Build + test app — xcodebuild $BUILD_ACTION (iOS Simulator)"
 BUILD_LOG="$(mktemp -t botanic-build.XXXXXX.log)"
 trap 'rm -f "$BUILD_LOG"' EXIT
-# Build once; tee full output to a log, surface only errors/warnings/result on screen.
 set +e
-xcodebuild -project Botanic.xcodeproj -scheme Botanic \
-  -destination 'generic/platform=iOS Simulator' $BUILD_ACTION 2>&1 | tee "$BUILD_LOG" \
-  | grep -E "error:|warning:|BUILD SUCCEEDED|BUILD FAILED" || true
-BUILD_STATUS=${PIPESTATUS[0]}
+if command -v xcbeautify >/dev/null 2>&1; then
+  xcodebuild -project Botanic.xcodeproj -scheme Botanic \
+    -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' $BUILD_ACTION 2>&1 | tee "$BUILD_LOG" \
+    | xcbeautify
+  BUILD_STATUS=${PIPESTATUS[0]}
+else
+  xcodebuild -project Botanic.xcodeproj -scheme Botanic \
+    -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' $BUILD_ACTION 2>&1 | tee "$BUILD_LOG" \
+    | grep -E "error:|warning:|BUILD SUCCEEDED|BUILD FAILED|Test Suite|passed|failed" || true
+  BUILD_STATUS=${PIPESTATUS[0]}
+fi
 set -e
 if [ "$BUILD_STATUS" -ne 0 ]; then
   red "  see full output: $BUILD_LOG"
   trap - EXIT  # keep the log around for debugging on failure
-  fail "app build failed"
+  fail "app build/test failed"
 fi
-green "✓ app built"
+green "✓ app built and tests passed"
 
 # --- 4. lint / format (optional, only if installed) -------------------------
 if command -v swiftlint >/dev/null 2>&1 && [ -f .swiftlint.yml ]; then
