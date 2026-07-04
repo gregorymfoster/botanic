@@ -5,42 +5,134 @@ struct HistoryView: View {
     var experiences: [Experience]
     /// Drives the push to Insights — bound so a launch arg can open it for screenshots.
     @Binding var autoOpenInsights: Bool
-    @State private var tab = 0
+    @Environment(\.modelContext) private var modelContext
+    @State private var editMode: EditMode = .inactive
+    @State private var renamingExperience: Experience?
+    @State private var renameDraft = ""
+    @State private var deletingExperience: Experience?
 
     private var finished: [Experience] {
         experiences.filter { $0.endedAt != nil }.sorted { $0.startedAt > $1.startedAt }
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+        List {
+            Section {
                 Text(countTitle)
                     .font(Dusk.serifItalic(16))
                     .foregroundStyle(Dusk.muted(0.6))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 22, bottom: 0, trailing: 22))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
 
                 Button { autoOpenInsights = true } label: {
                     insightsCard
                 }
                 .buttonStyle(.plain)
+                .listRowInsets(EdgeInsets(top: 6, leading: 22, bottom: 6, trailing: 22))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            }
 
-                SegmentedToggle(options: ["Experiences", "Supplements"], selection: $tab)
+            if finished.isEmpty {
+                EmptyHistory()
+                    .listRowInsets(EdgeInsets(top: 6, leading: 22, bottom: 6, trailing: 22))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            } else {
+                Section {
+                    ForEach(Array(finished.enumerated()), id: \.element.id) { index, exp in
+                        NavigationLink(value: exp) {
+                            ExperienceRow(experience: exp, emphasized: index == 0)
+                        }
+                        .buttonStyle(.plain)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 22, bottom: 6, trailing: 22))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) { deletingExperience = exp } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                            .tint(Dusk.danger)
 
-                if tab == 0 {
-                    experiencesList
-                } else {
-                    supplementsList
+                            Button {
+                                renameDraft = exp.title
+                                renamingExperience = exp
+                            } label: {
+                                Label("Rename", systemImage: "pencil")
+                            }
+                            .tint(Color(r: 122, g: 111, b: 208))
+                        }
+                    }
+                    .onDelete { offsets in
+                        for index in offsets {
+                            ExperienceStore.delete(finished[index], in: modelContext)
+                        }
+                    }
+                }
+
+                Section {
+                    Text("Titles are drafted on your device when an experience ends. Swipe to rename, or open one to edit anything.")
+                        .font(Dusk.sans(11))
+                        .foregroundStyle(Dusk.muted(0.45))
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .listRowInsets(EdgeInsets(top: 10, leading: 22, bottom: 16, trailing: 22))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
             }
-            .padding(.horizontal, 22)
-            .padding(.top, 8)
-            .padding(.bottom, 16)
         }
-        .scrollIndicators(.hidden)
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(DuskBackground())
+        .environment(\.editMode, $editMode)
         .navigationTitle("History")
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            if !finished.isEmpty {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(editMode == .active ? "Done" : "Edit") {
+                        withAnimation { editMode = editMode == .active ? .inactive : .active }
+                    }
+                    .foregroundStyle(Dusk.peach)
+                }
+            }
+        }
         .navigationDestination(isPresented: $autoOpenInsights) {
             InsightsView(experiences: experiences)
         }
+        .alert("Rename", isPresented: renameBinding) {
+            TextField("Title", text: $renameDraft)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                if let exp = renamingExperience {
+                    ExperienceStore.rename(exp, to: renameDraft, in: modelContext)
+                }
+                renamingExperience = nil
+            }
+        }
+        .confirmationDialog("Delete this experience?", isPresented: deleteBinding, titleVisibility: .visible) {
+            Button("Delete experience", role: .destructive) {
+                if let exp = deletingExperience {
+                    ExperienceStore.delete(exp, in: modelContext)
+                }
+                deletingExperience = nil
+            }
+            Button("Keep", role: .cancel) { deletingExperience = nil }
+        } message: {
+            Text("This removes its supplements, check-ins, and notes. This can't be undone.")
+        }
+    }
+
+    private var renameBinding: Binding<Bool> {
+        Binding(get: { renamingExperience != nil }, set: { if !$0 { renamingExperience = nil } })
+    }
+
+    private var deleteBinding: Binding<Bool> {
+        Binding(get: { deletingExperience != nil }, set: { if !$0 { deletingExperience = nil } })
     }
 
     private var countTitle: String {
@@ -86,49 +178,6 @@ struct HistoryView: View {
     private var sparkValues: [Double] {
         finished.reversed().compactMap { $0.feltSummary?.valence }
     }
-
-    private var experiencesList: some View {
-        VStack(spacing: 11) {
-            if finished.isEmpty {
-                EmptyHistory()
-            } else {
-                ForEach(Array(finished.enumerated()), id: \.element.id) { index, exp in
-                    NavigationLink(value: exp) {
-                        ExperienceRow(experience: exp, emphasized: index == 0)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-
-    private var supplementsList: some View {
-        VStack(spacing: 11) {
-            let counts = supplementCounts
-            if counts.isEmpty {
-                EmptyHistory()
-            } else {
-                ForEach(Array(counts.enumerated()), id: \.element.label) { index, item in
-                    HStack(spacing: 13) {
-                        SupplementSwatch(colorIndex: index, size: 44, checked: false)
-                        Text(item.label).font(Dusk.serif(17)).foregroundStyle(Dusk.text)
-                        Spacer()
-                        Text(item.count == 1 ? "1 time" : "\(item.count) times")
-                            .font(Dusk.sans(12.5)).foregroundStyle(Dusk.muted(0.5))
-                    }
-                    .padding(.horizontal, 16).padding(.vertical, 14)
-                    .glassCard(fill: 0.05, cornerRadius: 20)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(item.label), logged \(item.count == 1 ? "1 time" : "\(item.count) times")")
-                }
-            }
-        }
-    }
-
-    private var supplementCounts: [LabeledCount] {
-        let snapshots = ExperienceStore.snapshots(from: finished)
-        return InsightsEngine.summary(for: snapshots).topSupplements
-    }
 }
 
 // MARK: - Rows
@@ -142,7 +191,7 @@ struct ExperienceRow: View {
             Circle()
                 .fill(RadialGradient(colors: swatchColors, center: .init(x: 0.38, y: 0.34),
                                      startRadius: 0, endRadius: 44))
-                .frame(width: 44, height: 44)
+                .frame(width: 42, height: 42)
                 .overlay(Circle().strokeBorder(.white.opacity(0.3), lineWidth: 1).blur(radius: 0.5))
             VStack(alignment: .leading, spacing: 2) {
                 Text(experience.title)
@@ -187,7 +236,11 @@ struct ExperienceRow: View {
         let suppText = count == 1 ? "1 supplement" : "\(count) supplements"
         var parts = [BotanicFormat.shortDate(experience.startedAt), suppText,
                      experience.duration().botanicDuration]
-        if let felt = experience.feltSummary { parts.append(felt.rawValue.lowercased()) }
+        if let word = experience.feltWords.first {
+            parts.append(word.lowercased())
+        } else if let felt = experience.feltSummary {
+            parts.append(felt.rawValue.lowercased())
+        }
         return parts.joined(separator: " · ")
     }
 }

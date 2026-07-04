@@ -208,6 +208,45 @@ enum ExperienceStore {
         save(context)
     }
 
+    /// Renames an experience from History's swipe action or the detail screen's title edit. Marks
+    /// the title as user-authored so it's never silently overwritten by a future on-device draft.
+    // Phase 6b: mirror rename
+    static func rename(_ experience: Experience, to title: String, in context: ModelContext) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        experience.title = trimmed
+        experience.titleSource = .user
+        save(context)
+    }
+
+    /// Commits an edit to an experience's title and/or subtitle from the detail screen. Either value
+    /// may be left unchanged by passing the experience's current value. Marks the title as
+    /// user-authored, matching `rename(_:to:in:)`.
+    // Phase 6b: mirror rename
+    static func updateSummary(_ experience: Experience, title: String, subtitle: String?, in context: ModelContext) {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedTitle.isEmpty {
+            experience.title = trimmedTitle
+            experience.titleSource = .user
+        }
+        experience.subtitle = cleaned(subtitle ?? "")
+        save(context)
+    }
+
+    /// Updates the amount/time on a single supplement entry from the detail screen's inline edit.
+    static func updateSupplement(_ entry: SupplementEntry, howTaking: String, takenAt: Date, in context: ModelContext) {
+        entry.howTaking = cleaned(howTaking)
+        entry.takenAt = takenAt
+        save(context)
+    }
+
+    /// Sets or clears the "note to future me" from the detail screen's inline edit. An empty string
+    /// clears the note (stored as `nil`).
+    static func updateNoteToFuture(_ experience: Experience, note: String, in context: ModelContext) {
+        experience.noteToFuture = cleaned(note)
+        save(context)
+    }
+
     // MARK: - Insights bridge
 
     /// Maps finished experiences to framework-free snapshots for `InsightsEngine`.
