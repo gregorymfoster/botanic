@@ -1,14 +1,31 @@
 import BotanicKit
+import SwiftData
 import SwiftUI
 
 struct SettingsView: View {
     var experiences: [Experience]
+
     @AppStorage(NotificationManager.enabledKey) private var remindersEnabled = true
     @AppStorage(NotificationManager.intervalKey) private var reminderIntervalMinutes = 90
+    @AppStorage(NotificationManager.supplementAlertsEnabledKey) private var supplementAlertsEnabled = true
+    @AppStorage(NotificationManager.quietSuggestEnabledKey) private var quietSuggestEnabled = true
+    @AppStorage(NotificationManager.quietSuggestHoursKey) private var quietSuggestHours = 3
+
+    @AppStorage(BackupManager.icloudBackupEnabledKey) private var icloudBackupEnabled = true
+    @AppStorage(MarkdownMirrorService.mirrorEnabledKey) private var mirrorEnabled = true
+    @AppStorage(MarkdownMirrorService.fileNamingPatternKey) private var fileNamingPatternRaw = MarkdownFilePattern.dateTitle.rawValue
+
+    @State private var mirrorFolderURL: URL?
+    @State private var showingFolderImporter = false
+    @State private var folderPickFailed = false
+
     @State private var zipURL: URL?
     @State private var zipExportFailed = false
 
     private static let intervalOptions = [45, 60, 90, 120]
+    /// The "suggest ending after quiet" control folds the enabled flag and the hour threshold into a
+    /// single picker (0 = off) so there's no dead chevron when the feature is off.
+    private static let quietSuggestOptions = [0, 2, 3, 4]
 
     private var finished: [Experience] {
         experiences.filter { $0.endedAt != nil }.sorted { $0.startedAt > $1.startedAt }
@@ -18,79 +35,201 @@ struct SettingsView: View {
         experiences.contains { $0.endedAt == nil }
     }
 
-    /// Bridges the 45/60/90/120-minute preference to the `SegmentedToggle`'s 0-based index.
-    private var intervalIndex: Binding<Int> {
+    private var fileNamingPattern: MarkdownFilePattern {
+        MarkdownFilePattern(rawValue: fileNamingPatternRaw) ?? .dateTitle
+    }
+
+    private var intervalBinding: Binding<Int> {
+        Binding(get: { reminderIntervalMinutes }, set: { newValue in
+            reminderIntervalMinutes = newValue
+            NotificationManager.refresh(isLive: hasLiveExperience)
+        })
+    }
+
+    /// Bridges `quietSuggestEnabled` + `quietSuggestHours` to one selection: 0 means "Off".
+    private var quietSuggestBinding: Binding<Int> {
         Binding(
-            get: { Self.intervalOptions.firstIndex(of: reminderIntervalMinutes) ?? 2 },
-            set: { reminderIntervalMinutes = Self.intervalOptions[$0] }
+            get: { quietSuggestEnabled ? quietSuggestHours : 0 },
+            set: { newValue in
+                if newValue == 0 {
+                    quietSuggestEnabled = false
+                } else {
+                    quietSuggestEnabled = true
+                    quietSuggestHours = newValue
+                }
+                // No `lastEventAt` is available here (that lives on the live experience's event
+                // timeline, not in Settings) — the new threshold takes effect starting from the next
+                // logged event on the live experience, not retroactively.
+            }
+        )
+    }
+
+    @Environment(\.modelContext) private var modelContext
+
+    private var fileNamingBinding: Binding<MarkdownFilePattern> {
+        Binding(
+            get: { fileNamingPattern },
+            set: { newValue in
+                fileNamingPatternRaw = newValue.rawValue
+                MarkdownMirrorService.syncAll(experiences: experiences, in: modelContext)
+            }
         )
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                remindersCard
-                privacyCard
-                exportAllCard
-                aboutCard
-            }
-            .padding(.horizontal, 22).padding(.top, 8).padding(.bottom, 16)
+        List {
+            liveSection
+            dataSection
+            privacySection
+            footerSection
         }
-        .scrollIndicators(.hidden)
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.large)
+        .onAppear { mirrorFolderURL = MarkdownMirrorService.resolveFolder() }
+        .fileImporter(isPresented: $showingFolderImporter, allowedContentTypes: [.folder]) { result in
+            switch result {
+            case .success(let url):
+                do {
+                    try MarkdownMirrorService.setFolder(url)
+                    mirrorFolderURL = url
+                    MarkdownMirrorService.syncAll(experiences: experiences, in: modelContext)
+                } catch {
+                    folderPickFailed = true
+                }
+            case .failure:
+                folderPickFailed = true
+            }
+        }
+        .alert("Couldn't use that folder", isPresented: $folderPickFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Something went wrong saving access to that folder. Try choosing it again.")
+        }
+        .alert("Couldn't build the export", isPresented: $zipExportFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Something went wrong creating the .zip. Try again in a moment.")
+        }
     }
 
-    private var remindersCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("CHECK-IN REMINDERS")
-                .font(Dusk.sans(10.5, .bold)).tracking(1.6).foregroundStyle(Dusk.pinkSoft.opacity(0.85))
+    // MARK: - Section 1 — While an experience is live
 
+    private var liveSection: some View {
+        Section {
             Toggle(isOn: $remindersEnabled) {
-                Text("Gentle nudges to check in")
-                    .font(Dusk.sans(15, .semibold)).foregroundStyle(Dusk.text)
+                Text("Check-in nudges").font(Dusk.sans(15)).foregroundStyle(Dusk.text)
             }
             .tint(Dusk.peach)
             .onChange(of: remindersEnabled) { _, enabled in
                 if enabled { NotificationManager.requestAuthorization() }
                 NotificationManager.refresh(isLive: hasLiveExperience)
             }
+            .accessibilityHint("Soft haptic and lock screen glow while an experience is live")
 
-            if remindersEnabled {
-                Text("Every")
-                    .font(Dusk.sans(12)).foregroundStyle(Dusk.muted(0.5))
-                SegmentedToggle(options: ["45 min", "60 min", "90 min", "120 min"], selection: intervalIndex)
-                    .onChange(of: reminderIntervalMinutes) { _, _ in
-                        NotificationManager.refresh(isLive: hasLiveExperience)
-                    }
+            Picker(selection: intervalBinding) {
+                ForEach(Self.intervalOptions, id: \.self) { minutes in
+                    Text("Every \(minutes) min").tag(minutes)
+                }
+            } label: {
+                Text("Rhythm").font(Dusk.sans(15)).foregroundStyle(Dusk.text)
             }
+            .tint(Dusk.muted(0.6))
 
-            Text("Reminders only arrive while an experience is live, and stop when you end it.")
+            Toggle(isOn: $supplementAlertsEnabled) {
+                Text("Scheduled supplement alerts").font(Dusk.sans(15)).foregroundStyle(Dusk.text)
+            }
+            .tint(Dusk.peach)
+
+            Picker(selection: quietSuggestBinding) {
+                Text("Off").tag(0)
+                ForEach(Self.quietSuggestOptions.filter { $0 != 0 }, id: \.self) { hours in
+                    Text("\(hours) hours").tag(hours)
+                }
+            } label: {
+                Text("Suggest ending after quiet").font(Dusk.sans(15)).foregroundStyle(Dusk.text)
+            }
+            .tint(Dusk.muted(0.6))
+        } header: {
+            SectionLabel(title: "While an experience is live")
+        } footer: {
+            Text("Nudges are a soft haptic and a glow on the lock screen — never a loud notification.")
                 .font(Dusk.sans(11.5)).foregroundStyle(Dusk.muted(0.5)).lineSpacing(1)
         }
-        .padding(.horizontal, 17).padding(.vertical, 16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(fill: 0.05, cornerRadius: 20)
+        .listRowBackground(rowBackground)
+        .listRowSeparatorTint(Dusk.glassStroke.opacity(0.6))
     }
 
-    private var privacyCard: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "lock.shield").font(.system(size: 20)).foregroundStyle(Dusk.mint)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Stored on device").font(Dusk.sans(15, .semibold)).foregroundStyle(Dusk.text)
-                Text("Your journal never leaves this iPhone.").font(Dusk.sans(12)).foregroundStyle(Dusk.muted(0.55))
+    // MARK: - Section 2 — Your data
+
+    private var dataSection: some View {
+        Section {
+            Toggle(isOn: $icloudBackupEnabled) {
+                Text("iCloud backup").font(Dusk.sans(15)).foregroundStyle(Dusk.text)
             }
-            Spacer()
+            .tint(Dusk.mint)
+            .onChange(of: icloudBackupEnabled) { _, _ in BackupManager.apply() }
+
+            Toggle(isOn: $mirrorEnabled) {
+                Text("Mirror journal files to a folder").font(Dusk.sans(15)).foregroundStyle(Dusk.text)
+            }
+            .tint(Dusk.mint)
+            .onChange(of: mirrorEnabled) { _, enabled in
+                if enabled, mirrorFolderURL != nil {
+                    MarkdownMirrorService.syncAll(experiences: experiences, in: modelContext)
+                }
+            }
+
+            Button {
+                showingFolderImporter = true
+            } label: {
+                HStack {
+                    Text("Folder").font(Dusk.sans(15)).foregroundStyle(Dusk.text)
+                    Spacer()
+                    Text(mirrorFolderURL?.lastPathComponent ?? "Choose…")
+                        .font(Dusk.sans(14)).foregroundStyle(Dusk.muted(0.5))
+                    Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(Dusk.muted(0.35))
+                }
+                .contentShape(Rectangle())
+                .frame(minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Folder")
+            .accessibilityValue(mirrorFolderURL?.lastPathComponent ?? "Not chosen")
+            .accessibilityHint("Choose the folder journal files mirror to")
+
+            Picker(selection: fileNamingBinding) {
+                ForEach(MarkdownFilePattern.allCases, id: \.self) { pattern in
+                    Text(pattern.example).tag(pattern)
+                }
+            } label: {
+                Text("File naming").font(Dusk.sans(15)).foregroundStyle(Dusk.text)
+            }
+            .tint(Dusk.muted(0.6))
+
+            exportRow
+        } header: {
+            SectionLabel(title: "Your data")
+        } footer: {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("iCloud backup is included with your iPhone's normal backup — it isn't a live sync across your devices. Mirroring writes a Markdown file per experience to a folder you choose, which iCloud Drive can then sync however you've set it up.")
+                Text("Example: \(fileNamingPattern.example)")
+                    .font(Dusk.sans(11, .medium)).foregroundStyle(Dusk.muted(0.55))
+                    .monospaced()
+            }
+            .font(Dusk.sans(11.5)).foregroundStyle(Dusk.muted(0.5)).lineSpacing(1)
         }
-        .padding(.horizontal, 17).padding(.vertical, 16)
-        .glassCard(fill: 0.05, cornerRadius: 20)
+        .listRowBackground(rowBackground)
+        .listRowSeparatorTint(Dusk.glassStroke.opacity(0.6))
     }
 
     @ViewBuilder
-    private var exportAllCard: some View {
+    private var exportRow: some View {
         if let zipURL {
             ShareLink(item: zipURL) {
-                exportAllRow
+                exportRowLabel
             }
             .disabled(finished.isEmpty)
             .opacity(finished.isEmpty ? 0.5 : 1)
@@ -101,34 +240,26 @@ struct SettingsView: View {
             Button {
                 generateZip()
             } label: {
-                exportAllRow
+                exportRowLabel
             }
+            .buttonStyle(.plain)
             .disabled(finished.isEmpty)
             .opacity(finished.isEmpty ? 0.5 : 1)
             .accessibilityLabel("Export everything")
             .accessibilityHint(finished.isEmpty
                 ? "Available once you've finished an experience"
                 : "Builds a .zip of all experiences as Markdown files")
-            .alert("Couldn't build the export", isPresented: $zipExportFailed) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("Something went wrong creating the .zip. Try again in a moment.")
-            }
         }
     }
 
-    private var exportAllRow: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "square.and.arrow.up").font(.system(size: 18)).foregroundStyle(Dusk.peach)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Export everything").font(Dusk.sans(15, .semibold)).foregroundStyle(Dusk.text)
-                Text("All experiences as Markdown files in a .zip.").font(Dusk.sans(12)).foregroundStyle(Dusk.muted(0.55))
-            }
+    private var exportRowLabel: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "square.and.arrow.up").font(.system(size: 16)).foregroundStyle(Dusk.peach)
+            Text("Export everything as .zip").font(Dusk.sans(15)).foregroundStyle(Dusk.peach)
             Spacer()
-            Image(systemName: "chevron.right").font(.system(size: 13)).foregroundStyle(Dusk.muted(0.4))
         }
-        .padding(.horizontal, 17).padding(.vertical, 16)
-        .glassCard(fill: 0.05, cornerRadius: 20)
+        .contentShape(Rectangle())
+        .frame(minHeight: 44)
     }
 
     private func generateZip() {
@@ -139,11 +270,44 @@ struct SettingsView: View {
         }
     }
 
-    private var aboutCard: some View {
-        Text("Botanic is a private supplement & experience journal. It is user-authored and descriptive — it offers no doses and no guidance, and it is not medical advice.")
-            .font(Dusk.serifItalic(13.5)).foregroundStyle(Dusk.muted(0.6)).lineSpacing(2)
-            .padding(.horizontal, 17).padding(.vertical, 16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .glassCard(fill: 0.04, cornerRadius: 18)
+    // MARK: - Section 3 — Privacy
+
+    private var privacySection: some View {
+        Section {
+            HStack(spacing: 12) {
+                Image(systemName: "checkmark.shield").font(.system(size: 18)).foregroundStyle(Dusk.mint)
+                Text("On-device intelligence").font(Dusk.sans(15)).foregroundStyle(Dusk.text)
+                Spacer()
+            }
+            .frame(minHeight: 44)
+            .accessibilityElement(children: .combine)
+        } header: {
+            SectionLabel(title: "Privacy")
+        } footer: {
+            Text("Titles, summaries and word suggestions come from a small model on your phone — always on, nothing to configure, nothing ever leaves the device.")
+                .font(Dusk.sans(11.5)).foregroundStyle(Dusk.muted(0.5)).lineSpacing(1)
+        }
+        .listRowBackground(rowBackground)
+        .listRowSeparatorTint(Dusk.glassStroke.opacity(0.6))
+    }
+
+    // MARK: - Footer
+
+    private var footerSection: some View {
+        Section {
+            Text("Botanic 2.0 · a private journal, not medical advice")
+                .font(Dusk.serifItalic(13.5))
+                .foregroundStyle(Dusk.muted(0.55))
+                .frame(maxWidth: .infinity, alignment: .center)
+                .multilineTextAlignment(.center)
+                .padding(.vertical, 4)
+        }
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+    }
+
+    private var rowBackground: some View {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(Color.white.opacity(0.05))
     }
 }
