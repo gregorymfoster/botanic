@@ -5,6 +5,8 @@ struct SettingsView: View {
     var experiences: [Experience]
     @AppStorage(NotificationManager.enabledKey) private var remindersEnabled = true
     @AppStorage(NotificationManager.intervalKey) private var reminderIntervalMinutes = 90
+    @State private var zipURL: URL?
+    @State private var zipExportFailed = false
 
     private static let intervalOptions = [45, 60, 90, 120]
 
@@ -84,26 +86,57 @@ struct SettingsView: View {
         .glassCard(fill: 0.05, cornerRadius: 20)
     }
 
+    @ViewBuilder
     private var exportAllCard: some View {
-        ShareLink(item: allMarkdown) {
-            HStack(spacing: 12) {
-                Image(systemName: "square.and.arrow.up").font(.system(size: 18)).foregroundStyle(Dusk.peach)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Export everything").font(Dusk.sans(15, .semibold)).foregroundStyle(Dusk.text)
-                    Text("All experiences as a single Markdown file.").font(Dusk.sans(12)).foregroundStyle(Dusk.muted(0.55))
-                }
-                Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 13)).foregroundStyle(Dusk.muted(0.4))
+        if let zipURL {
+            ShareLink(item: zipURL) {
+                exportAllRow
             }
-            .padding(.horizontal, 17).padding(.vertical, 16)
-            .glassCard(fill: 0.05, cornerRadius: 20)
+            .disabled(finished.isEmpty)
+            .opacity(finished.isEmpty ? 0.5 : 1)
+            .accessibilityLabel("Export everything")
+            .accessibilityHint("Shares all experiences as a .zip of Markdown files")
+            .onDisappear { self.zipURL = nil }
+        } else {
+            Button {
+                generateZip()
+            } label: {
+                exportAllRow
+            }
+            .disabled(finished.isEmpty)
+            .opacity(finished.isEmpty ? 0.5 : 1)
+            .accessibilityLabel("Export everything")
+            .accessibilityHint(finished.isEmpty
+                ? "Available once you've finished an experience"
+                : "Builds a .zip of all experiences as Markdown files")
+            .alert("Couldn't build the export", isPresented: $zipExportFailed) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Something went wrong creating the .zip. Try again in a moment.")
+            }
         }
-        .disabled(finished.isEmpty)
-        .opacity(finished.isEmpty ? 0.5 : 1)
-        .accessibilityLabel("Export everything")
-        .accessibilityHint(finished.isEmpty
-            ? "Available once you've finished an experience"
-            : "Shares all experiences as a single Markdown file")
+    }
+
+    private var exportAllRow: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "square.and.arrow.up").font(.system(size: 18)).foregroundStyle(Dusk.peach)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Export everything").font(Dusk.sans(15, .semibold)).foregroundStyle(Dusk.text)
+                Text("All experiences as Markdown files in a .zip.").font(Dusk.sans(12)).foregroundStyle(Dusk.muted(0.55))
+            }
+            Spacer()
+            Image(systemName: "chevron.right").font(.system(size: 13)).foregroundStyle(Dusk.muted(0.4))
+        }
+        .padding(.horizontal, 17).padding(.vertical, 16)
+        .glassCard(fill: 0.05, cornerRadius: 20)
+    }
+
+    private func generateZip() {
+        do {
+            zipURL = try MarkdownMirrorService.exportZipURL(experiences: experiences)
+        } catch {
+            zipExportFailed = true
+        }
     }
 
     private var aboutCard: some View {
@@ -112,9 +145,5 @@ struct SettingsView: View {
             .padding(.horizontal, 17).padding(.vertical, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .glassCard(fill: 0.04, cornerRadius: 18)
-    }
-
-    private var allMarkdown: String {
-        finished.map(MarkdownExport.experience).joined(separator: "\n\n\n")
     }
 }

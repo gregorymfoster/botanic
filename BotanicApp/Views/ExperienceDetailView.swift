@@ -49,7 +49,7 @@ struct ExperienceDetailView: View {
                     } label: {
                         Label("Rename", systemImage: "pencil")
                     }
-                    ShareLink(item: markdown) {
+                    shareLink {
                         Label("Share", systemImage: "square.and.arrow.up")
                     }
                     Button(role: .destructive) { showingDeleteConfirm = true } label: {
@@ -346,7 +346,7 @@ struct ExperienceDetailView: View {
                     .font(Dusk.sans(12.5)).foregroundStyle(Dusk.muted(0.5))
             }
             Spacer(minLength: 8)
-            ShareLink(item: markdown) {
+            shareLink {
                 Text("Share")
                     .font(Dusk.sans(13, .semibold))
                     .foregroundStyle(Dusk.peach)
@@ -359,6 +359,17 @@ struct ExperienceDetailView: View {
 
     private var markdown: String {
         MarkdownExport.experience(experience)
+    }
+
+    /// Shares the experience's markdown as a real file when a temp copy can be written (so the share
+    /// sheet offers "Save to Files" etc. with the right filename), falling back to the plain string.
+    @ViewBuilder
+    private func shareLink<Label: View>(@ViewBuilder label: () -> Label) -> some View {
+        if let url = MarkdownMirrorService.temporaryShareURL(for: experience) {
+            ShareLink(item: url, label: label)
+        } else {
+            ShareLink(item: markdown, label: label)
+        }
     }
 }
 

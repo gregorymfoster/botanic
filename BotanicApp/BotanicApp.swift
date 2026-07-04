@@ -6,6 +6,7 @@ struct BotanicApp: App {
     init() {
         AppFonts.registerAll()
         Dusk.applyControlAppearance()
+        BackupManager.apply()
     }
 
     var body: some Scene {

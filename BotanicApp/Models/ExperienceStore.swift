@@ -197,6 +197,7 @@ enum ExperienceStore {
         for entry in experience.scheduledSupplements {
             NotificationManager.cancelSupplementAlert(id: entry.id)
         }
+        MarkdownMirrorService.sync(experience, in: context)
     }
 
     /// Permanently removes an experience and its cascaded supplements, check-ins, and journal entries.
@@ -210,19 +211,18 @@ enum ExperienceStore {
 
     /// Renames an experience from History's swipe action or the detail screen's title edit. Marks
     /// the title as user-authored so it's never silently overwritten by a future on-device draft.
-    // Phase 6b: mirror rename
     static func rename(_ experience: Experience, to title: String, in context: ModelContext) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         experience.title = trimmed
         experience.titleSource = .user
         save(context)
+        MarkdownMirrorService.sync(experience, in: context)
     }
 
     /// Commits an edit to an experience's title and/or subtitle from the detail screen. Either value
     /// may be left unchanged by passing the experience's current value. Marks the title as
     /// user-authored, matching `rename(_:to:in:)`.
-    // Phase 6b: mirror rename
     static func updateSummary(_ experience: Experience, title: String, subtitle: String?, in context: ModelContext) {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedTitle.isEmpty {
@@ -231,6 +231,7 @@ enum ExperienceStore {
         }
         experience.subtitle = cleaned(subtitle ?? "")
         save(context)
+        MarkdownMirrorService.sync(experience, in: context)
     }
 
     /// Updates the amount/time on a single supplement entry from the detail screen's inline edit.
@@ -238,6 +239,9 @@ enum ExperienceStore {
         entry.howTaking = cleaned(howTaking)
         entry.takenAt = takenAt
         save(context)
+        if let experience = entry.experience {
+            MarkdownMirrorService.sync(experience, in: context)
+        }
     }
 
     /// Sets or clears the "note to future me" from the detail screen's inline edit. An empty string
@@ -245,6 +249,7 @@ enum ExperienceStore {
     static func updateNoteToFuture(_ experience: Experience, note: String, in context: ModelContext) {
         experience.noteToFuture = cleaned(note)
         save(context)
+        MarkdownMirrorService.sync(experience, in: context)
     }
 
     // MARK: - Insights bridge
