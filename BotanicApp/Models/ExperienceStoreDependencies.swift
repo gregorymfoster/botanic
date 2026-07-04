@@ -27,30 +27,30 @@ protocol NotificationScheduling {
     func cancelSupplementAlert(id: UUID)
 }
 
-/// Production `NotificationScheduling` — thin wrapper over `NotificationManager`'s static funcs.
+/// Production `NotificationScheduling` — thin wrapper over `NotificationManager.live`'s funcs.
 struct LiveNotificationScheduler: NotificationScheduling {
     func scheduleSupplementAlert(id: UUID, name: String, at date: Date) {
-        NotificationManager.scheduleSupplementAlert(id: id, name: name, at: date)
+        NotificationManager.live.scheduleSupplementAlert(id: id, name: name, at: date)
     }
 
     func rescheduleQuietSuggestion(lastEventAt: Date) {
-        NotificationManager.rescheduleQuietSuggestion(lastEventAt: lastEventAt)
+        NotificationManager.live.rescheduleQuietSuggestion(lastEventAt: lastEventAt)
     }
 
     func scheduleRemindersIfEnabled() {
-        NotificationManager.scheduleRemindersIfEnabled()
+        NotificationManager.live.scheduleRemindersIfEnabled()
     }
 
     func cancelReminders() {
-        NotificationManager.cancelReminders()
+        NotificationManager.live.cancelReminders()
     }
 
     func cancelQuietSuggestion() {
-        NotificationManager.cancelQuietSuggestion()
+        NotificationManager.live.cancelQuietSuggestion()
     }
 
     func cancelSupplementAlert(id: UUID) {
-        NotificationManager.cancelSupplementAlert(id: id)
+        NotificationManager.live.cancelSupplementAlert(id: id)
     }
 }
 

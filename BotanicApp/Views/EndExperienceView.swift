@@ -81,12 +81,14 @@ struct EndExperienceView: View {
                 HStack(spacing: 11) {
                     Button("Not yet") { dismiss() }
                         .buttonStyle(DuskSoftButton())
+                        .accessibilityIdentifier(AccessibilityID.EndExperience.notYet)
                     Button("End experience") {
                         Haptics.tap()
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { phase = .complete }
                         beginGeneration()
                     }
                     .buttonStyle(DuskPrimaryButton(height: 54))
+                    .accessibilityIdentifier(AccessibilityID.EndExperience.confirmEnd)
                 }
             }
             .padding(22)
@@ -146,6 +148,7 @@ struct EndExperienceView: View {
                         }
                         .buttonStyle(DuskPrimaryButton(height: 54))
                         .disabled(isGenerating && title.isEmpty)
+                        .accessibilityIdentifier(AccessibilityID.EndExperience.saveToHistory)
 
                         Button("Keep it running") {
                             generationTask?.cancel()
@@ -155,6 +158,7 @@ struct EndExperienceView: View {
                         .font(Dusk.sans(14, .medium))
                         .foregroundStyle(Dusk.muted(0.6))
                         .padding(.top, 2)
+                        .accessibilityIdentifier(AccessibilityID.EndExperience.keepRunning)
                     }
                     .padding(.top, 4)
                 }
@@ -206,6 +210,7 @@ struct EndExperienceView: View {
                         .foregroundStyle(Dusk.text)
                         .onChange(of: title) { _, _ in userEdited = true }
                         .accessibilityLabel("Experience title, editable")
+                        .accessibilityIdentifier(AccessibilityID.EndExperience.titleField)
                     Rectangle()
                         .stroke(style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
                         .foregroundStyle(Dusk.peach.opacity(0.6))
@@ -220,6 +225,7 @@ struct EndExperienceView: View {
                     .lineLimit(1...4)
                     .onChange(of: subtitle) { _, _ in userEdited = true }
                     .accessibilityLabel("Experience subtitle, editable")
+                    .accessibilityIdentifier(AccessibilityID.EndExperience.subtitleField)
             }
 
             HStack(spacing: 8) {

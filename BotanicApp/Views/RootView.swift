@@ -90,6 +90,7 @@ struct RootView: View {
             }
             .tabItem { Label("Today", systemImage: "circle.fill") }
             .tag(AppTab.today)
+            .accessibilityIdentifier(AccessibilityID.Tab.today)
 
             tabContent {
                 NavigationStack(path: $historyPath) {
@@ -101,6 +102,7 @@ struct RootView: View {
             }
             .tabItem { Label("History", systemImage: "clock") }
             .tag(AppTab.history)
+            .accessibilityIdentifier(AccessibilityID.Tab.history)
 
             tabContent {
                 NavigationStack {
@@ -109,6 +111,7 @@ struct RootView: View {
             }
             .tabItem { Label("Settings", systemImage: "gearshape") }
             .tag(AppTab.settings)
+            .accessibilityIdentifier(AccessibilityID.Tab.settings)
         }
         .tint(Dusk.peach)
         .background(DuskBackground(live: liveExperience != nil && selectedTab == .today))

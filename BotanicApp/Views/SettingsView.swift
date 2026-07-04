@@ -42,7 +42,7 @@ struct SettingsView: View {
     private var intervalBinding: Binding<Int> {
         Binding(get: { reminderIntervalMinutes }, set: { newValue in
             reminderIntervalMinutes = newValue
-            NotificationManager.refresh(isLive: hasLiveExperience)
+            NotificationManager.live.refresh(isLive: hasLiveExperience)
         })
     }
 
@@ -106,11 +106,13 @@ struct SettingsView: View {
         }
         .alert("Couldn't use that folder", isPresented: $folderPickFailed) {
             Button("OK", role: .cancel) {}
+                .accessibilityIdentifier(AccessibilityID.Settings.folderPickFailedOK)
         } message: {
             Text("Something went wrong saving access to that folder. Try choosing it again.")
         }
         .alert("Couldn't build the export", isPresented: $zipExportFailed) {
             Button("OK", role: .cancel) {}
+                .accessibilityIdentifier(AccessibilityID.Settings.zipExportFailedOK)
         } message: {
             Text("Something went wrong creating the .zip. Try again in a moment.")
         }
@@ -125,10 +127,11 @@ struct SettingsView: View {
             }
             .tint(Dusk.peach)
             .onChange(of: remindersEnabled) { _, enabled in
-                if enabled { NotificationManager.requestAuthorization() }
-                NotificationManager.refresh(isLive: hasLiveExperience)
+                if enabled { NotificationManager.live.requestAuthorization() }
+                NotificationManager.live.refresh(isLive: hasLiveExperience)
             }
             .accessibilityHint("Soft haptic and lock screen glow while an experience is live")
+            .accessibilityIdentifier(AccessibilityID.Settings.checkInNudgesToggle)
 
             Picker(selection: intervalBinding) {
                 ForEach(Self.intervalOptions, id: \.self) { minutes in
@@ -138,11 +141,13 @@ struct SettingsView: View {
                 Text("Rhythm").font(Dusk.sans(15)).foregroundStyle(Dusk.text)
             }
             .tint(Dusk.muted(0.6))
+            .accessibilityIdentifier(AccessibilityID.Settings.rhythmPicker)
 
             Toggle(isOn: $supplementAlertsEnabled) {
                 Text("Scheduled supplement alerts").font(Dusk.sans(15)).foregroundStyle(Dusk.text)
             }
             .tint(Dusk.peach)
+            .accessibilityIdentifier(AccessibilityID.Settings.supplementAlertsToggle)
 
             Picker(selection: quietSuggestBinding) {
                 Text("Off").tag(0)
@@ -153,6 +158,7 @@ struct SettingsView: View {
                 Text("Suggest ending after quiet").font(Dusk.sans(15)).foregroundStyle(Dusk.text)
             }
             .tint(Dusk.muted(0.6))
+            .accessibilityIdentifier(AccessibilityID.Settings.quietSuggestPicker)
         } header: {
             SectionLabel(title: "While an experience is live")
         } footer: {
@@ -172,6 +178,7 @@ struct SettingsView: View {
             }
             .tint(Dusk.mint)
             .onChange(of: icloudBackupEnabled) { _, _ in BackupManager.apply() }
+            .accessibilityIdentifier(AccessibilityID.Settings.icloudBackupToggle)
 
             Toggle(isOn: $mirrorEnabled) {
                 Text("Mirror journal files to a folder").font(Dusk.sans(15)).foregroundStyle(Dusk.text)
@@ -182,6 +189,7 @@ struct SettingsView: View {
                     MarkdownMirrorService.syncAll(experiences: experiences, in: modelContext)
                 }
             }
+            .accessibilityIdentifier(AccessibilityID.Settings.mirrorEnabledToggle)
 
             Button {
                 showingFolderImporter = true
@@ -201,6 +209,7 @@ struct SettingsView: View {
             .accessibilityLabel("Folder")
             .accessibilityValue(mirrorFolderURL?.lastPathComponent ?? "Not chosen")
             .accessibilityHint("Choose the folder journal files mirror to")
+            .accessibilityIdentifier(AccessibilityID.Settings.folderPicker)
 
             Picker(selection: fileNamingBinding) {
                 ForEach(MarkdownFilePattern.allCases, id: \.self) { pattern in
@@ -210,6 +219,7 @@ struct SettingsView: View {
                 Text("File naming").font(Dusk.sans(15)).foregroundStyle(Dusk.text)
             }
             .tint(Dusk.muted(0.6))
+            .accessibilityIdentifier(AccessibilityID.Settings.fileNamingPicker)
 
             exportRow
         } header: {
@@ -237,6 +247,7 @@ struct SettingsView: View {
             .opacity(finished.isEmpty ? 0.5 : 1)
             .accessibilityLabel("Export everything")
             .accessibilityHint("Shares all experiences as a .zip of Markdown files")
+            .accessibilityIdentifier(AccessibilityID.Settings.exportZip)
             .onDisappear { self.zipURL = nil }
         } else {
             Button {
@@ -251,6 +262,7 @@ struct SettingsView: View {
             .accessibilityHint(finished.isEmpty
                 ? "Available once you've finished an experience"
                 : "Builds a .zip of all experiences as Markdown files")
+            .accessibilityIdentifier(AccessibilityID.Settings.exportZip)
         }
     }
 

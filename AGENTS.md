@@ -27,8 +27,10 @@ xcodebuild test -project Botanic.xcodeproj -scheme Botanic -destination 'platfor
 - **BotanicAppTests** (`BotanicAppTests/`): app-hosted unit test bundle (`@testable import Botanic`),
   wired as a hosted test target (`TEST_HOST`/`BUNDLE_LOADER` pointed at the `Botanic.app` binary) so it
   can exercise SwiftData models, stores, and other app-target code that can't move into BotanicKit.
-  Currently just a smoke test (`BotanicAppTestsSmoke.swift`) — add real coverage here for
-  view-model/store logic that lives in the app target.
+  Covers `ExperienceStore` lifecycle rules, `NotificationManager`, `BackupManager`,
+  `MarkdownMirrorService`, and `TagUsageStore` via injected fakes (in-memory SwiftData, fake
+  `FileSystem`, suite-scoped `UserDefaults`). Add coverage here for store/service logic that lives
+  in the app target; put pure logic in BotanicKit instead.
 - **`Botanic` scheme's test action** runs both `BotanicKitTests` and `BotanicAppTests` with
   `gatherCoverageData: true`. Invoke directly with:
   ```sh
@@ -37,7 +39,7 @@ xcodebuild test -project Botanic.xcodeproj -scheme Botanic -destination 'platfor
 
 ## Local Verify Gate
 
-There is no cloud CI — `scripts/check.sh` is the canonical "is it safe to commit/release?" gate.
+`scripts/check.sh` is the canonical "is it safe to commit/release?" gate, run locally.
 
 ```sh
 scripts/check.sh            # full: package tests → xcodegen → simulator build+test (BotanicKitTests + BotanicAppTests) (+ swiftlint if configured)
@@ -53,6 +55,26 @@ package tests, for a quick inner loop.
 Run the full gate before committing and the `--release` gate before releasing. To enforce it
 automatically, `scripts/install-hooks.sh` wires `pre-commit → check.sh --fast` and
 `pre-push → check.sh` (opt-in, per contributor; bypass once with `git commit/push --no-verify`).
+
+## Cloud CI
+
+`.github/workflows/ci.yml` runs on GitHub Actions on every push to `main` and every pull request,
+mirroring `scripts/check.sh`'s two tiers as separate jobs on `macos-26` runners (Xcode 26 selected
+via `Xcode_26*.app`):
+
+- **`kit-tests`**: `swift test --package-path BotanicKit` — fails fast before the slower app tier runs.
+- **`app-tests`** (needs `kit-tests`): installs `xcodegen`, runs `xcodegen generate`, creates a
+  deterministic iOS Simulator with `xcrun simctl create` (newest available iOS runtime + an iPhone
+  device type, since hosted runners don't reliably have a device named "iPhone 17 Pro Max"), then runs
+  `xcodebuild test -project Botanic.xcodeproj -scheme Botanic -destination 'platform=iOS
+  Simulator,id=<created-udid>' -enableCodeCoverage YES`, piped through `xcbeautify` when present. The
+  build log and `.xcresult` are used for a coverage summary and uploaded as an artifact on failure.
+  `CODE_SIGNING_ALLOWED=NO` is set since simulator destinations don't need signing.
+
+**This workflow is unverified** — it has been validated for YAML syntax (`actionlint`, which passes
+cleanly including its embedded shellcheck) and its `simctl`/`xcresulttool` logic was smoke-tested
+locally, but no run has actually executed on a GitHub-hosted runner yet. Treat the first push/PR run
+as the real test; fix forward if the runner image or Xcode path assumptions don't hold.
 
 > Screenshot note: capturing `NavigationStack`-backed tabs (History, Settings, and pushed Insights/
 > Detail) via `simctl io screenshot` currently renders blank on the Xcode 26 simulator; sheet-based
@@ -98,6 +120,12 @@ QA — they're not a general-purpose testing seam (see `BotanicAppTests` for tha
 - **No force-unwraps in app code.** Avoid `!`, `try!`, `as!`; handle the `nil`/throwing path.
 - **Accessibility is a quality bar.** VoiceOver labels on controls and the orbs, Dynamic Type
   support, and nothing critical conveyed by color or motion alone (respect Reduce Motion).
+- **Automation identifiers are centralized.** Every interactive element carries an
+  `.accessibilityIdentifier` from the `AccessibilityID` namespace
+  (`BotanicApp/Support/AccessibilityID.swift`), grouped by screen. UI tests and agent tooling must
+  target these identifiers, never user-visible copy. Add a constant there when adding a control.
+- **Testability conventions** (seams, injection pattern, anti-goals) are documented in
+  `docs/testability.md`.
 
 ## Sentry (crash/error reporting)
 

@@ -79,6 +79,7 @@ private struct IdleTodayView: View {
             }
             .buttonStyle(DuskPrimaryButton())
             .accessibilityHint("Starts a new experience")
+            .accessibilityIdentifier(AccessibilityID.Today.addSupplement)
         }
         .padding(.horizontal, 22)
         .padding(.top, 16)
@@ -139,6 +140,7 @@ private struct QuickAddCard: View {
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint("Prefills the Add supplement sheet from your last log")
+        .accessibilityIdentifier("\(AccessibilityID.Today.quickAddPrefix).\(item.name)")
     }
 
     private var accessibilityLabel: String {
@@ -208,6 +210,7 @@ private struct LiveExperienceView: View {
                 .glassCard(fill: 0.07, stroke: Dusk.glassStrokeStrong, cornerRadius: 20)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier(AccessibilityID.Today.endExperience)
         }
     }
 
@@ -261,6 +264,7 @@ private struct LiveExperienceView: View {
                 .glassCard(fill: 0.04, cornerRadius: 16)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier(AccessibilityID.Today.addSupplement)
         }
     }
 
@@ -319,6 +323,7 @@ private struct LiveExperienceView: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel(lastCheckInAccessibilityLabel(for: lastCheckIn))
             .accessibilityHint("Opens the full timeline")
+            .accessibilityIdentifier(AccessibilityID.Today.lastCheckInSnippet)
         }
     }
 
@@ -353,6 +358,7 @@ private struct LiveExperienceView: View {
             .layoutPriority(1)
             .accessibilityLabel("Check in")
             .accessibilityHint("Log how right now feels")
+            .accessibilityIdentifier(AccessibilityID.Today.checkIn)
 
             Button(action: onNote) {
                 HStack(spacing: 8) {
@@ -367,6 +373,7 @@ private struct LiveExperienceView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Note")
             .accessibilityHint("Write a freeform note")
+            .accessibilityIdentifier(AccessibilityID.Today.note)
         }
         .padding(6)
         .frame(height: 62)
@@ -393,6 +400,7 @@ private struct LiveExperienceView: View {
                     Button("Done") { showingTimeline = false }
                         .font(Dusk.sans(14, .semibold))
                         .tint(Dusk.pinkSoft)
+                        .accessibilityIdentifier(AccessibilityID.Today.timelineDone)
                 }
             }
         }

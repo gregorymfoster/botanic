@@ -94,6 +94,7 @@ struct InsightsView: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("How they felt, over time")
             .accessibilityValue(feltTrendDescription)
+            .accessibilityIdentifier(AccessibilityID.Insights.feltTrendChart)
         }
         .padding(.horizontal, 17).padding(.vertical, 15)
         .warmGlassCard()

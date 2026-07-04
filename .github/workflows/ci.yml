@@ -1,0 +1,141 @@
+name: CI
+
+# Mirrors scripts/check.sh's two tiers:
+#   1. BotanicKit package tests (fast, fails fast)
+#   2. xcodegen generate + full app build/test on an iOS Simulator (BotanicKitTests + BotanicAppTests)
+#
+# NOTE: unverified until the first push/PR actually runs this on GitHub's runners.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kit-tests:
+    name: BotanicKit package tests
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        run: |
+          set -euo pipefail
+          # GitHub's macOS runners ship several Xcode_<version>.app installs side by side;
+          # match the newest 26.x rather than hardcoding an exact patch version.
+          XCODE_PATH="$(find /Applications -maxdepth 1 -name 'Xcode_26*.app' 2>/dev/null | sort -V | tail -n1)"
+          if [ -z "$XCODE_PATH" ]; then
+            echo "No Xcode_26*.app found on this runner; falling back to default xcode-select." >&2
+          else
+            sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+          fi
+          xcodebuild -version
+
+      - name: swift test --package-path BotanicKit
+        run: swift test --package-path BotanicKit
+
+  app-tests:
+    name: App build + test (iOS Simulator)
+    runs-on: macos-26
+    needs: kit-tests
+    env:
+      CODE_SIGNING_ALLOWED: NO
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        run: |
+          set -euo pipefail
+          XCODE_PATH="$(find /Applications -maxdepth 1 -name 'Xcode_26*.app' 2>/dev/null | sort -V | tail -n1)"
+          if [ -z "$XCODE_PATH" ]; then
+            echo "No Xcode_26*.app found on this runner; falling back to default xcode-select." >&2
+          else
+            sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+          fi
+          xcodebuild -version
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Create a deterministic iOS simulator
+        id: sim
+        run: |
+          set -euo pipefail
+
+          # Pick the newest available iOS runtime, then an iPhone device type it supports,
+          # rather than hardcoding a device name that may not exist on this runner's image.
+          RUNTIME_ID="$(xcrun simctl list runtimes --json \
+            | ruby -rjson -e '
+              data = JSON.parse(STDIN.read)
+              ios = data["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") }
+              raise "no available iOS runtimes" if ios.empty?
+              latest = ios.max_by { |r| Gem::Version.new(r["version"]) }
+              puts latest["identifier"]
+            ')"
+          echo "Using runtime: $RUNTIME_ID"
+
+          DEVICE_TYPE_ID="$(xcrun simctl list devicetypes --json \
+            | ruby -rjson -e '
+              data = JSON.parse(STDIN.read)
+              phones = data["devicetypes"].select { |d| d["identifier"].include?("iPhone") }
+              raise "no iPhone device types" if phones.empty?
+              # Prefer a Pro Max if present, else fall back to the last (newest) iPhone entry.
+              pick = phones.find { |d| d["identifier"].include?("Pro-Max") } || phones.last
+              puts pick["identifier"]
+            ')"
+          echo "Using device type: $DEVICE_TYPE_ID"
+
+          UDID="$(xcrun simctl create ci-phone "$DEVICE_TYPE_ID" "$RUNTIME_ID")"
+          echo "Created simulator: $UDID"
+          xcrun simctl boot "$UDID"
+
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Build + test app — xcodebuild test (iOS Simulator)
+        run: |
+          set -euo pipefail
+          rm -rf ci.xcresult
+          if command -v xcbeautify >/dev/null 2>&1; then
+            xcodebuild -project Botanic.xcodeproj -scheme Botanic \
+              -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
+              -enableCodeCoverage YES \
+              -resultBundlePath ci.xcresult \
+              test 2>&1 | tee build.log | xcbeautify
+            exit "${PIPESTATUS[0]}"
+          else
+            xcodebuild -project Botanic.xcodeproj -scheme Botanic \
+              -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
+              -enableCodeCoverage YES \
+              -resultBundlePath ci.xcresult \
+              test 2>&1 | tee build.log
+            exit "${PIPESTATUS[0]}"
+          fi
+
+      - name: Summarize code coverage
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ ! -d ci.xcresult ]; then
+            echo "No ci.xcresult bundle found — skipping coverage summary."
+            exit 0
+          fi
+          xcrun xcresulttool get --legacy --format json --path ci.xcresult \
+            | ruby -rjson -e '
+              data = JSON.parse(STDIN.read)
+              cov = data.dig("metrics", "value")
+              puts cov ? "coverage metrics: #{cov}" : "xcresult parsed OK (coverage detail not in legacy summary; see actions/upload-artifact if deeper inspection is needed)"
+            ' || echo "(coverage summary parse skipped — inspect ci.xcresult manually if needed)"
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: build.log

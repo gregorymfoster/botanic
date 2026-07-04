@@ -30,6 +30,7 @@ struct HistoryView: View {
                     insightsCard
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier(AccessibilityID.History.insightsCard)
                 .listRowInsets(EdgeInsets(top: 6, leading: 22, bottom: 6, trailing: 22))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
@@ -47,6 +48,7 @@ struct HistoryView: View {
                             ExperienceRow(experience: exp, emphasized: index == 0)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("\(AccessibilityID.History.experienceRowPrefix).\(exp.id.uuidString)")
                         .listRowInsets(EdgeInsets(top: 6, leading: 22, bottom: 6, trailing: 22))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
@@ -56,6 +58,7 @@ struct HistoryView: View {
                                 Label("Delete", systemImage: "trash")
                             }
                             .tint(Dusk.danger)
+                            .accessibilityIdentifier("\(AccessibilityID.History.deleteSwipePrefix).\(exp.id.uuidString)")
 
                             Button {
                                 renameDraft = exp.title
@@ -64,6 +67,7 @@ struct HistoryView: View {
                                 Label("Rename", systemImage: "pencil")
                             }
                             .tint(Color(r: 122, g: 111, b: 208))
+                            .accessibilityIdentifier("\(AccessibilityID.History.renameSwipePrefix).\(exp.id.uuidString)")
                         }
                     }
                     .onDelete { offsets in
@@ -98,6 +102,7 @@ struct HistoryView: View {
                         withAnimation { editMode = editMode == .active ? .inactive : .active }
                     }
                     .foregroundStyle(Dusk.peach)
+                    .accessibilityIdentifier(AccessibilityID.History.editToggle)
                 }
             }
         }
@@ -106,13 +111,16 @@ struct HistoryView: View {
         }
         .alert("Rename", isPresented: renameBinding) {
             TextField("Title", text: $renameDraft)
+                .accessibilityIdentifier(AccessibilityID.History.renameField)
             Button("Cancel", role: .cancel) {}
+                .accessibilityIdentifier(AccessibilityID.History.renameCancel)
             Button("Save") {
                 if let exp = renamingExperience {
                     ExperienceStore.live.rename(exp, to: renameDraft, in: modelContext)
                 }
                 renamingExperience = nil
             }
+            .accessibilityIdentifier(AccessibilityID.History.renameSave)
         }
         .confirmationDialog("Delete this experience?", isPresented: deleteBinding, titleVisibility: .visible) {
             Button("Delete experience", role: .destructive) {
@@ -121,7 +129,9 @@ struct HistoryView: View {
                 }
                 deletingExperience = nil
             }
+            .accessibilityIdentifier(AccessibilityID.History.deleteConfirm)
             Button("Keep", role: .cancel) { deletingExperience = nil }
+                .accessibilityIdentifier(AccessibilityID.History.deleteKeep)
         } message: {
             Text("This removes its supplements, check-ins, and notes. This can't be undone.")
         }

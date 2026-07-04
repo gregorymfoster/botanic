@@ -42,7 +42,9 @@ struct AddSupplementView: View {
             trailingTitle: "Save",
             trailingEnabled: draft.isValid,
             onLeading: { dismiss() },
-            onTrailing: save
+            onTrailing: save,
+            leadingAccessibilityID: AccessibilityID.AddSupplement.close,
+            trailingAccessibilityID: AccessibilityID.AddSupplement.saveToolbar
         ) {
             ScrollView {
                 VStack(spacing: 12) {
@@ -53,6 +55,7 @@ struct AddSupplementView: View {
                             .foregroundStyle(Dusk.text)
                             .focused($nameFocused)
                             .submitLabel(.done)
+                            .accessibilityIdentifier(AccessibilityID.AddSupplement.nameField)
                     }
 
                     if !libraryItems.isEmpty {
@@ -65,6 +68,7 @@ struct AddSupplementView: View {
                             .font(Dusk.serifItalic(16))
                             .foregroundStyle(Dusk.muted(0.82))
                             .lineLimit(1...3)
+                            .accessibilityIdentifier(AccessibilityID.AddSupplement.howTakingField)
                     }
 
                     FieldBlock(label: "Intention · optional") {
@@ -73,6 +77,7 @@ struct AddSupplementView: View {
                             .font(Dusk.serifItalic(16))
                             .foregroundStyle(Dusk.muted(0.82))
                             .lineLimit(1...3)
+                            .accessibilityIdentifier(AccessibilityID.AddSupplement.intentionField)
                     }
 
                     whenSection
@@ -92,6 +97,7 @@ struct AddSupplementView: View {
                     .buttonStyle(DuskPrimaryButton(height: 54))
                     .disabled(!draft.isValid)
                     .opacity(draft.isValid ? 1 : 0.5)
+                    .accessibilityIdentifier(AccessibilityID.AddSupplement.save)
                 }
                 .padding(.horizontal, 22)
                 .padding(.top, 8)
@@ -152,6 +158,7 @@ struct AddSupplementView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(item.name)
         .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
+        .accessibilityIdentifier("\(AccessibilityID.AddSupplement.recentChipPrefix).\(item.name)")
     }
 
     private var whenSection: some View {
@@ -162,6 +169,7 @@ struct AddSupplementView: View {
                 .padding(.leading, 2)
 
             SegmentedToggle(options: ["Now", "Schedule for later"], selection: scheduleBinding)
+                .accessibilityIdentifier(AccessibilityID.AddSupplement.scheduleToggle)
 
             if draft.scheduleForLater {
                 HStack {
@@ -169,6 +177,7 @@ struct AddSupplementView: View {
                     DatePicker("", selection: $draft.scheduledFor, displayedComponents: [.hourAndMinute])
                         .labelsHidden()
                         .tint(Dusk.peach)
+                        .accessibilityIdentifier(AccessibilityID.AddSupplement.scheduledForPicker)
                     Spacer()
                 }
                 .padding(.horizontal, 16).padding(.vertical, 11)

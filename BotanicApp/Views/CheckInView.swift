@@ -25,7 +25,8 @@ struct CheckInView: View {
             trailingTitle: "\(experience.duration().botanicDuration) in",
             trailingEnabled: false,
             onLeading: { dismiss() },
-            onTrailing: {}
+            onTrailing: {},
+            leadingAccessibilityID: AccessibilityID.CheckIn.cancel
         ) {
             ScrollView {
                 VStack(spacing: 16) {
@@ -48,9 +49,11 @@ struct CheckInView: View {
                     scaleSlider(title: "Intensity", value: $draft.intensity,
                                 word: CheckInWordEngine.intensityWord(draft.intensity),
                                 wordColor: violet, colors: [Dusk.lavender, Dusk.pink])
+                        .accessibilityIdentifier(AccessibilityID.CheckIn.intensitySlider)
                     scaleSlider(title: "Body load", value: $draft.bodyLoad,
                                 word: CheckInWordEngine.bodyLoadWord(draft.bodyLoad),
                                 wordColor: Dusk.lavender, colors: [Dusk.mint, Dusk.peach])
+                        .accessibilityIdentifier(AccessibilityID.CheckIn.bodyLoadSlider)
 
                     presenceSection
 
@@ -60,6 +63,7 @@ struct CheckInView: View {
                             .font(Dusk.serifItalic(16))
                             .foregroundStyle(Dusk.muted(0.82))
                             .lineLimit(1...3)
+                            .accessibilityIdentifier(AccessibilityID.CheckIn.noteField)
                     }
 
                     Spacer(minLength: 8)
@@ -68,6 +72,7 @@ struct CheckInView: View {
                         onSave(commit())
                     }
                     .buttonStyle(DuskPrimaryButton(height: 54))
+                    .accessibilityIdentifier(AccessibilityID.CheckIn.save)
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 28)
@@ -141,6 +146,7 @@ struct CheckInView: View {
                 knobSize: 26
             )
             .accessibilityLabel("Pleasantness, from unpleasant to pleasant")
+            .accessibilityIdentifier(AccessibilityID.CheckIn.valenceSlider)
         }
     }
 
@@ -185,6 +191,7 @@ struct CheckInView: View {
                             TagChip(label: tag, selected: draft.tags.contains(tag)) {
                                 if draft.tags.contains(tag) { draft.tags.remove(tag) } else { draft.tags.insert(tag) }
                             }
+                            .accessibilityIdentifier("\(AccessibilityID.CheckIn.tagChipPrefix).\(tag)")
                         }
                     }
                 }

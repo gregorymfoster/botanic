@@ -49,16 +49,20 @@ struct ExperienceDetailView: View {
                     } label: {
                         Label("Rename", systemImage: "pencil")
                     }
+                    .accessibilityIdentifier(AccessibilityID.ExperienceDetail.rename)
                     shareLink {
                         Label("Share", systemImage: "square.and.arrow.up")
                     }
+                    .accessibilityIdentifier(AccessibilityID.ExperienceDetail.share)
                     Button(role: .destructive) { showingDeleteConfirm = true } label: {
                         Label("Delete", systemImage: "trash")
                     }
+                    .accessibilityIdentifier(AccessibilityID.ExperienceDetail.delete)
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
                 .accessibilityLabel("More actions")
+                .accessibilityIdentifier(AccessibilityID.ExperienceDetail.moreActions)
             }
         }
         .confirmationDialog("Delete this experience?", isPresented: $showingDeleteConfirm, titleVisibility: .visible) {
@@ -66,7 +70,9 @@ struct ExperienceDetailView: View {
                 ExperienceStore.live.delete(experience, in: modelContext)
                 dismiss()
             }
+            .accessibilityIdentifier(AccessibilityID.ExperienceDetail.deleteConfirm)
             Button("Keep", role: .cancel) {}
+                .accessibilityIdentifier(AccessibilityID.ExperienceDetail.deleteKeep)
         } message: {
             Text("This removes its supplements, check-ins, and notes. This can't be undone.")
         }
@@ -90,6 +96,7 @@ struct ExperienceDetailView: View {
                         .submitLabel(.done)
                         .onSubmit(commitTitleEdit)
                         .accessibilityLabel("Experience title")
+                        .accessibilityIdentifier(AccessibilityID.ExperienceDetail.titleField)
                 } else {
                     Button {
                         beginEditingTitle()
@@ -103,6 +110,7 @@ struct ExperienceDetailView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Title: \(experience.title)")
                     .accessibilityHint("Double tap to edit")
+                    .accessibilityIdentifier(AccessibilityID.ExperienceDetail.titleButton)
                 }
 
                 if isEditingTitle {
@@ -111,6 +119,7 @@ struct ExperienceDetailView: View {
                         .submitLabel(.done)
                         .onSubmit(commitTitleEdit)
                         .accessibilityLabel("Experience subtitle")
+                        .accessibilityIdentifier(AccessibilityID.ExperienceDetail.subtitleField)
                 } else {
                     Button {
                         beginEditingTitle()
@@ -120,14 +129,17 @@ struct ExperienceDetailView: View {
                             .foregroundStyle(experience.subtitle == nil ? Dusk.muted(0.4) : Dusk.muted(0.75))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier(AccessibilityID.ExperienceDetail.subtitleButton)
                 }
 
                 if isEditingTitle {
                     HStack(spacing: 10) {
                         Button("Cancel") { isEditingTitle = false }
                             .font(Dusk.sans(12.5, .semibold)).foregroundStyle(Dusk.muted(0.6))
+                            .accessibilityIdentifier(AccessibilityID.ExperienceDetail.titleEditCancel)
                         Button("Save", action: commitTitleEdit)
                             .font(Dusk.sans(12.5, .bold)).foregroundStyle(Dusk.peach)
+                            .accessibilityIdentifier(AccessibilityID.ExperienceDetail.titleEditSave)
                     }
                     .padding(.top, 2)
                 } else {
@@ -200,6 +212,7 @@ struct ExperienceDetailView: View {
                 }
                 .font(Dusk.sans(11.5, .semibold))
                 .foregroundStyle(Dusk.peach)
+                .accessibilityIdentifier(AccessibilityID.ExperienceDetail.editSupplements)
             }
             ForEach(Array(experience.supplements.sorted { $0.effectiveTime < $1.effectiveTime }.enumerated()),
                     id: \.element.id) { index, s in
@@ -234,10 +247,12 @@ struct ExperienceDetailView: View {
                 .multilineTextAlignment(.trailing)
                 .frame(maxWidth: 110)
                 .onChange(of: binding.wrappedValue.howTaking) { _, _ in commitSupplementDraft(for: s) }
+                .accessibilityIdentifier("\(AccessibilityID.ExperienceDetail.supplementHowTakingFieldPrefix).\(s.id.uuidString)")
             DatePicker("", selection: binding.takenAt, displayedComponents: .hourAndMinute)
                 .labelsHidden()
                 .font(Dusk.sans(12))
                 .onChange(of: binding.wrappedValue.takenAt) { _, _ in commitSupplementDraft(for: s) }
+                .accessibilityIdentifier("\(AccessibilityID.ExperienceDetail.supplementTakenAtPickerPrefix).\(s.id.uuidString)")
         }
     }
 
@@ -281,11 +296,14 @@ struct ExperienceDetailView: View {
                     .lineLimit(2...6)
                     .submitLabel(.done)
                     .onSubmit(commitNoteEdit)
+                    .accessibilityIdentifier(AccessibilityID.ExperienceDetail.noteField)
                 HStack(spacing: 10) {
                     Button("Cancel") { isEditingNote = false }
                         .font(Dusk.sans(12.5, .semibold)).foregroundStyle(Dusk.muted(0.6))
+                        .accessibilityIdentifier(AccessibilityID.ExperienceDetail.noteEditCancel)
                     Button("Save", action: commitNoteEdit)
                         .font(Dusk.sans(12.5, .bold)).foregroundStyle(Dusk.peach)
+                        .accessibilityIdentifier(AccessibilityID.ExperienceDetail.noteEditSave)
                 }
             } else {
                 Button {
@@ -299,6 +317,7 @@ struct ExperienceDetailView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier(AccessibilityID.ExperienceDetail.noteButton)
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 14)
@@ -351,6 +370,7 @@ struct ExperienceDetailView: View {
                     .font(Dusk.sans(13, .semibold))
                     .foregroundStyle(Dusk.peach)
             }
+            .accessibilityIdentifier(AccessibilityID.ExperienceDetail.shareRow)
         }
         .padding(.horizontal, 15).padding(.vertical, 12)
         .glassCard(fill: 0.05, cornerRadius: 16)

@@ -1,3 +1,4 @@
+import BotanicKit
 import Foundation
 import UserNotifications
 
@@ -5,8 +6,13 @@ import UserNotifications
 /// experience lifecycle (`ExperienceStore` schedules on start, cancels on end) and by the Settings
 /// toggle. Preferences live in `UserDefaults` under the same keys the SettingsView binds via
 /// `@AppStorage`, so this manager reads them directly without a view.
+///
+/// All "should this fire / when" decisions are delegated to `NotificationPolicy` in BotanicKit —
+/// this type only reads settings from its injected `UserDefaults` and drives
+/// `UNUserNotificationCenter`. `NotificationManager.live` is the shared production instance;
+/// `LiveNotificationScheduler` in `ExperienceStoreDependencies.swift` wraps it for `ExperienceStore`.
 @MainActor
-enum NotificationManager {
+struct NotificationManager {
     /// `@AppStorage` keys — keep in sync with `SettingsView`.
     static let enabledKey = "remindersEnabled"
     static let intervalKey = "reminderIntervalMinutes"
@@ -18,34 +24,43 @@ enum NotificationManager {
     private static let quietSuggestID = "botanic.quiet"
     private static func supplementAlertID(_ id: UUID) -> String { "botanic.supplement.\(id.uuidString)" }
 
-    /// Reminders default **on** at **90 minutes** (matches the SettingsView `@AppStorage` defaults).
-    static var isEnabled: Bool {
-        UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true
+    /// The shared production instance, backed by `UserDefaults.standard`.
+    static let live = NotificationManager()
+
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
     }
 
-    static var intervalMinutes: Int {
-        let stored = UserDefaults.standard.object(forKey: intervalKey) as? Int
+    /// Reminders default **on** at **90 minutes** (matches the SettingsView `@AppStorage` defaults).
+    var isEnabled: Bool {
+        defaults.object(forKey: Self.enabledKey) as? Bool ?? true
+    }
+
+    var intervalMinutes: Int {
+        let stored = defaults.object(forKey: Self.intervalKey) as? Int
         return stored ?? 90
     }
 
     /// Scheduled-supplement alerts default **on**.
-    static var supplementAlertsEnabled: Bool {
-        UserDefaults.standard.object(forKey: supplementAlertsEnabledKey) as? Bool ?? true
+    var supplementAlertsEnabled: Bool {
+        defaults.object(forKey: Self.supplementAlertsEnabledKey) as? Bool ?? true
     }
 
     /// Suggest-ending-after-quiet defaults **on** at a **3 hour** threshold.
-    static var quietSuggestEnabled: Bool {
-        UserDefaults.standard.object(forKey: quietSuggestEnabledKey) as? Bool ?? true
+    var quietSuggestEnabled: Bool {
+        defaults.object(forKey: Self.quietSuggestEnabledKey) as? Bool ?? true
     }
 
-    static var quietSuggestHours: Int {
-        let stored = UserDefaults.standard.object(forKey: quietSuggestHoursKey) as? Int
+    var quietSuggestHours: Int {
+        let stored = defaults.object(forKey: Self.quietSuggestHoursKey) as? Int
         return stored ?? 3
     }
 
     // MARK: - Authorization
 
-    static func requestAuthorization() {
+    func requestAuthorization() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
 
@@ -53,42 +68,42 @@ enum NotificationManager {
 
     /// Schedules the repeating reminder when the user has reminders enabled. Requests authorization
     /// first so a freshly-enabled session prompts once. Call when an experience goes live.
-    static func scheduleRemindersIfEnabled() {
+    func scheduleRemindersIfEnabled() {
         guard isEnabled else { return }
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
             guard granted else { return }
-            Task { @MainActor in schedule() }
+            Task { @MainActor in self.schedule() }
         }
     }
 
     /// Re-evaluates scheduling after a preference change. `isLive` gates it so reminders never fire
     /// outside an experience.
-    static func refresh(isLive: Bool) {
-        if isEnabled && isLive {
+    func refresh(isLive: Bool) {
+        if NotificationPolicy.shouldScheduleReminders(isEnabled: isEnabled, isLive: isLive) {
             scheduleRemindersIfEnabled()
         } else {
             cancelReminders()
         }
     }
 
-    static func cancelReminders() {
+    func cancelReminders() {
         UNUserNotificationCenter.current()
-            .removePendingNotificationRequests(withIdentifiers: [reminderID])
+            .removePendingNotificationRequests(withIdentifiers: [Self.reminderID])
     }
 
-    private static func schedule() {
+    private func schedule() {
         let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: [reminderID])
+        center.removePendingNotificationRequests(withIdentifiers: [Self.reminderID])
 
         let content = UNMutableNotificationContent()
         content.title = "How are you feeling?"
         content.body = "Take a slow breath and check in with where you are."
         content.sound = .default
 
-        let seconds = TimeInterval(max(1, intervalMinutes) * 60)
+        let seconds = TimeInterval(NotificationPolicy.clampedReminderIntervalMinutes(intervalMinutes) * 60)
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: true)
-        let request = UNNotificationRequest(identifier: reminderID, content: content, trigger: trigger)
+        let request = UNNotificationRequest(identifier: Self.reminderID, content: content, trigger: trigger)
         center.add(request)
     }
 
@@ -96,8 +111,10 @@ enum NotificationManager {
 
     /// Schedules a one-shot alert for a supplement planned for later. Skips silently if the setting
     /// is off or `date` has already passed.
-    static func scheduleSupplementAlert(id: UUID, name: String, at date: Date) {
-        guard supplementAlertsEnabled, date > Date() else { return }
+    func scheduleSupplementAlert(id: UUID, name: String, at date: Date) {
+        guard NotificationPolicy.shouldScheduleSupplementAlert(
+            scheduledFor: date, now: Date(), alertsEnabled: supplementAlertsEnabled
+        ) else { return }
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
             guard granted else { return }
@@ -112,27 +129,30 @@ enum NotificationManager {
                 )
                 let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
                 let request = UNNotificationRequest(
-                    identifier: supplementAlertID(id), content: content, trigger: trigger
+                    identifier: Self.supplementAlertID(id), content: content, trigger: trigger
                 )
                 center.add(request)
             }
         }
     }
 
-    static func cancelSupplementAlert(id: UUID) {
+    func cancelSupplementAlert(id: UUID) {
         UNUserNotificationCenter.current()
-            .removePendingNotificationRequests(withIdentifiers: [supplementAlertID(id)])
+            .removePendingNotificationRequests(withIdentifiers: [Self.supplementAlertID(id)])
     }
 
     // MARK: - Suggest ending after quiet
 
     /// Reschedules the "still going?" suggestion relative to the latest activity in a live
     /// experience. Cancels any pending suggestion first so only the most recent activity counts.
-    static func rescheduleQuietSuggestion(lastEventAt: Date) {
+    func rescheduleQuietSuggestion(lastEventAt: Date) {
         cancelQuietSuggestion()
-        guard quietSuggestEnabled else { return }
-        let fireDate = lastEventAt.addingTimeInterval(TimeInterval(max(1, quietSuggestHours)) * 3600)
-        guard fireDate > Date() else { return }
+        guard let fireDate = NotificationPolicy.quietSuggestionFireDate(
+            lastEventAt: lastEventAt,
+            quietSuggestHours: quietSuggestHours,
+            isEnabled: quietSuggestEnabled,
+            now: Date()
+        ) else { return }
 
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
@@ -148,15 +168,15 @@ enum NotificationManager {
                 )
                 let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
                 let request = UNNotificationRequest(
-                    identifier: quietSuggestID, content: content, trigger: trigger
+                    identifier: Self.quietSuggestID, content: content, trigger: trigger
                 )
                 center.add(request)
             }
         }
     }
 
-    static func cancelQuietSuggestion() {
+    func cancelQuietSuggestion() {
         UNUserNotificationCenter.current()
-            .removePendingNotificationRequests(withIdentifiers: [quietSuggestID])
+            .removePendingNotificationRequests(withIdentifiers: [Self.quietSuggestID])
     }
 }

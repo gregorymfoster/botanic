@@ -11,6 +11,10 @@ struct SheetScaffold<Content: View>: View {
     var trailingEnabled: Bool = true
     var onLeading: () -> Void
     var onTrailing: (() -> Void)?
+    /// Accessibility identifiers for the toolbar's leading/trailing controls, set by each call site
+    /// via `AccessibilityID` constants so UI tests never match on the (localizable) button copy.
+    var leadingAccessibilityID: String?
+    var trailingAccessibilityID: String?
     @ViewBuilder var content: Content
 
     enum LeadingStyle: Equatable { case cancel, chevron, none }
@@ -33,6 +37,7 @@ struct SheetScaffold<Content: View>: View {
                             }
                             .tint(Dusk.pinkSoft)
                             .disabled(!trailingEnabled)
+                            .accessibilityIdentifier(trailingAccessibilityID ?? "")
                         }
                     }
                 }
@@ -46,11 +51,13 @@ struct SheetScaffold<Content: View>: View {
             Button("Cancel", action: onLeading)
                 .font(Dusk.sans(15))
                 .tint(Dusk.muted(0.6))
+                .accessibilityIdentifier(leadingAccessibilityID ?? "")
         case .chevron:
             Button(action: onLeading) {
                 Image(systemName: "chevron.left").font(.system(size: 16, weight: .semibold))
             }
             .tint(Dusk.text)
+            .accessibilityIdentifier(leadingAccessibilityID ?? "")
         case .none:
             EmptyView()
         }

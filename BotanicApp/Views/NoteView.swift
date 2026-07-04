@@ -17,7 +17,9 @@ struct NoteView: View {
             trailingTitle: "Save",
             trailingEnabled: !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             onLeading: { dismiss() },
-            onTrailing: send
+            onTrailing: send,
+            leadingAccessibilityID: AccessibilityID.Note.cancel,
+            trailingAccessibilityID: AccessibilityID.Note.saveToolbar
         ) {
             VStack(spacing: 0) {
                 Text("\(experience.title) · \(experience.duration().botanicDuration) in")
@@ -33,6 +35,7 @@ struct NoteView: View {
                     .background(.clear)
                     .lineSpacing(8)
                     .focused($composing)
+                    .accessibilityIdentifier(AccessibilityID.Note.textEditor)
                     .padding(.horizontal, 19)
                     .padding(.top, 12)
                     .overlay(alignment: .topLeading) {
@@ -77,6 +80,7 @@ struct NoteView: View {
             .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .opacity(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
             .accessibilityLabel("Save note")
+            .accessibilityIdentifier(AccessibilityID.Note.send)
         }
         .padding(.horizontal, 17).padding(.vertical, 15)
         .glassCard(fill: 0.05, stroke: Dusk.glassStrokeStrong, cornerRadius: 22, highlighted: true)

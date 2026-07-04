@@ -48,46 +48,95 @@ extension Experience {
 /// everything as .zip" archive. Preferences live in `UserDefaults`, matching `NotificationManager`'s
 /// shape — Settings binds to the same keys via `@AppStorage`, and this enum reads them directly.
 @MainActor
-enum MarkdownMirrorService {
+struct MarkdownMirrorService {
     /// `@AppStorage` keys — keep in sync with `SettingsView`.
     static let mirrorEnabledKey = "mirrorEnabled"
     static let mirrorBookmarkKey = "mirrorFolderBookmark"
     static let fileNamingPatternKey = "markdownFilePattern"
 
+    /// The shared production instance — wired to `UserDefaults.standard`, the real filesystem, and
+    /// real security-scoped bookmark resolution. Existing call sites (`MarkdownMirrorService.sync`,
+    /// `.syncAll`, etc.) forward to this via the `static` funcs below, so they stay one line.
+    static let live = MarkdownMirrorService()
+
     private static let logger = Logger(subsystem: "com.botanic.app", category: "MarkdownMirror")
+
+    private let defaults: UserDefaults
+    private let fileSystem: any FileSystem
+    /// Resolves the stored bookmark to a folder URL, along with a refreshed bookmark to persist if
+    /// the system flagged the original as stale. Defaults to the real security-scoped bookmark
+    /// resolution (device-only); tests inject a closure that hands back a folder URL directly so the
+    /// bookmark machinery itself never has to run under test.
+    private let folderResolver: (Data) -> (url: URL, refreshedBookmark: Data?)?
+
+    init(
+        defaults: UserDefaults = .standard,
+        fileSystem: any FileSystem = LiveFileSystem(),
+        folderResolver: ((Data) -> (url: URL, refreshedBookmark: Data?)?)? = nil
+    ) {
+        self.defaults = defaults
+        self.fileSystem = fileSystem
+        self.folderResolver = folderResolver ?? Self.resolveBookmark
+    }
 
     /// Mirroring defaults **on** — it only actually writes once a folder has been chosen
     /// (`isConfigured`), so the default reflects the design's "on" toggle without requiring setup.
-    static var isEnabled: Bool {
-        UserDefaults.standard.object(forKey: mirrorEnabledKey) as? Bool ?? true
+    var isEnabled: Bool {
+        defaults.object(forKey: Self.mirrorEnabledKey) as? Bool ?? true
     }
 
-    static var isConfigured: Bool {
-        UserDefaults.standard.data(forKey: mirrorBookmarkKey) != nil
+    var isConfigured: Bool {
+        defaults.data(forKey: Self.mirrorBookmarkKey) != nil
     }
 
-    static var pattern: MarkdownFilePattern {
-        let stored = UserDefaults.standard.string(forKey: fileNamingPatternKey)
+    var pattern: MarkdownFilePattern {
+        let stored = defaults.string(forKey: Self.fileNamingPatternKey)
         return stored.flatMap(MarkdownFilePattern.init(rawValue:)) ?? .dateTitle
     }
+
+    static var isEnabled: Bool { live.isEnabled }
+    static var isConfigured: Bool { live.isConfigured }
+    static var pattern: MarkdownFilePattern { live.pattern }
 
     // MARK: - Folder selection
 
     /// Persists a security-scoped bookmark for a folder picked via `.fileImporter`/document picker.
     /// iOS bookmarks (unlike macOS) are created without `.withSecurityScope` — that option is
     /// macOS-only and throws on iOS.
-    static func setFolder(_ url: URL) throws {
+    func setFolder(_ url: URL) throws {
         let didAccess = url.startAccessingSecurityScopedResource()
         defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
 
         let bookmark = try url.bookmarkData(options: [])
-        UserDefaults.standard.set(bookmark, forKey: mirrorBookmarkKey)
+        defaults.set(bookmark, forKey: Self.mirrorBookmarkKey)
     }
 
-    /// Resolves the stored bookmark back to a URL. Re-saves the bookmark if the system flags it as
-    /// stale but is still able to resolve it; drops the bookmark entirely if resolution fails.
+    static func setFolder(_ url: URL) throws {
+        try live.setFolder(url)
+    }
+
+    /// Resolves the stored bookmark back to a URL via `folderResolver`. Re-saves the bookmark if the
+    /// system flags it as stale but is still able to resolve it; drops the bookmark entirely if
+    /// resolution fails.
+    func resolveFolder() -> URL? {
+        guard let bookmark = defaults.data(forKey: Self.mirrorBookmarkKey) else { return nil }
+        guard let resolved = folderResolver(bookmark) else {
+            defaults.removeObject(forKey: Self.mirrorBookmarkKey)
+            return nil
+        }
+        if let refreshedBookmark = resolved.refreshedBookmark {
+            defaults.set(refreshedBookmark, forKey: Self.mirrorBookmarkKey)
+        }
+        return resolved.url
+    }
+
     static func resolveFolder() -> URL? {
-        guard let bookmark = UserDefaults.standard.data(forKey: mirrorBookmarkKey) else { return nil }
+        live.resolveFolder()
+    }
+
+    /// The real (device-only) bookmark resolution: `URL(resolvingBookmarkData:)`, handing back a
+    /// refreshed bookmark for the caller to persist if the system flagged the original as stale.
+    private static func resolveBookmark(_ bookmark: Data) -> (url: URL, refreshedBookmark: Data?)? {
         var isStale = false
         do {
             let url = try URL(
@@ -96,13 +145,10 @@ enum MarkdownMirrorService {
                 relativeTo: nil,
                 bookmarkDataIsStale: &isStale
             )
-            if isStale, let refreshed = try? url.bookmarkData(options: []) {
-                UserDefaults.standard.set(refreshed, forKey: mirrorBookmarkKey)
-            }
-            return url
+            let refreshed = isStale ? try? url.bookmarkData(options: []) : nil
+            return (url, refreshed)
         } catch {
             logger.error("Failed to resolve mirror folder bookmark: \(error.localizedDescription)")
-            UserDefaults.standard.removeObject(forKey: mirrorBookmarkKey)
             return nil
         }
     }
@@ -113,7 +159,7 @@ enum MarkdownMirrorService {
     /// Markdown file, renaming/removing the previous file if the title changed. No-op unless mirroring
     /// is enabled, a folder is configured, and the experience has ended. Never throws — failures are
     /// logged and left for the next sync attempt.
-    static func sync(_ experience: Experience, in context: ModelContext) {
+    func sync(_ experience: Experience, in context: ModelContext) {
         guard isEnabled, isConfigured, experience.endedAt != nil else { return }
         guard let folder = resolveFolder() else { return }
 
@@ -135,16 +181,24 @@ enum MarkdownMirrorService {
 
         experience.markdownFilename = finalName
         do { try context.save() } catch {
-            logger.error("Failed to save markdownFilename after mirror sync: \(error.localizedDescription)")
+            Self.logger.error("Failed to save markdownFilename after mirror sync: \(error.localizedDescription)")
         }
+    }
+
+    static func sync(_ experience: Experience, in context: ModelContext) {
+        live.sync(experience, in: context)
     }
 
     /// Re-mirrors every finished experience — used after the folder changes or mirroring is toggled
     /// back on, so previously-unmirrored (or differently-located) experiences catch up.
-    static func syncAll(experiences: [Experience], in context: ModelContext) {
+    func syncAll(experiences: [Experience], in context: ModelContext) {
         for experience in experiences where experience.endedAt != nil {
             sync(experience, in: context)
         }
+    }
+
+    static func syncAll(experiences: [Experience], in context: ModelContext) {
+        live.syncAll(experiences: experiences, in: context)
     }
 
     // MARK: - Sharing
@@ -152,18 +206,22 @@ enum MarkdownMirrorService {
     /// A temporary, non-security-scoped copy of an experience's markdown suitable for `ShareLink`.
     /// Sharing the mirrored file directly would require holding security-scoped access open for the
     /// life of the share sheet, so instead we regenerate the markdown fresh into the temp directory.
-    static func temporaryShareURL(for experience: Experience) -> URL? {
+    func temporaryShareURL(for experience: Experience) -> URL? {
         let name = experience.markdownFilename
             ?? MarkdownFileNaming.filename(date: experience.startedAt, title: experience.title, pattern: pattern)
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        let url = fileSystem.temporaryDirectory.appendingPathComponent(name)
         let markdown = MarkdownExport.experience(experience.markdownExportInput())
         do {
-            try markdown.write(to: url, atomically: true, encoding: .utf8)
+            try fileSystem.write(markdown, to: url)
             return url
         } catch {
-            logger.error("Failed to write temporary share file: \(error.localizedDescription)")
+            Self.logger.error("Failed to write temporary share file: \(error.localizedDescription)")
             return nil
         }
+    }
+
+    static func temporaryShareURL(for experience: Experience) -> URL? {
+        live.temporaryShareURL(for: experience)
     }
 
     // MARK: - Zip export
@@ -172,10 +230,10 @@ enum MarkdownMirrorService {
     /// `NSFileCoordinator` to zip it (`.forUploading` hands back a zipped temporary URL for directory
     /// reads — the documented, dependency-free way to zip on iOS), and copies that zip to a stable
     /// path so the caller can hand it to a share sheet.
-    static func exportZipURL(experiences: [Experience]) throws -> URL {
-        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    func exportZipURL(experiences: [Experience]) throws -> URL {
+        let tempDir = fileSystem.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let folderURL = tempDir.appendingPathComponent("Botanic Journal")
-        try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+        try fileSystem.createDirectory(at: folderURL, withIntermediateDirectories: true)
 
         let finished = experiences.filter { $0.endedAt != nil }
         for experience in finished {
@@ -183,7 +241,7 @@ enum MarkdownMirrorService {
                 ?? MarkdownFileNaming.filename(date: experience.startedAt, title: experience.title, pattern: pattern)
             let fileURL = folderURL.appendingPathComponent(name)
             let markdown = MarkdownExport.experience(experience.markdownExportInput())
-            try markdown.write(to: fileURL, atomically: true, encoding: .utf8)
+            try fileSystem.write(markdown, to: fileURL)
         }
 
         var coordinatorError: NSError?
@@ -199,28 +257,32 @@ enum MarkdownMirrorService {
                            userInfo: [NSLocalizedDescriptionKey: "Failed to create zip archive."])
         }
 
-        let stableURL = FileManager.default.temporaryDirectory.appendingPathComponent("Botanic Journal.zip")
-        if FileManager.default.fileExists(atPath: stableURL.path) {
-            try FileManager.default.removeItem(at: stableURL)
+        let stableURL = fileSystem.temporaryDirectory.appendingPathComponent("Botanic Journal.zip")
+        if fileSystem.fileExists(atPath: stableURL.path) {
+            try fileSystem.removeItem(at: stableURL)
         }
-        try FileManager.default.copyItem(at: zippedURL, to: stableURL)
+        try fileSystem.copyItem(at: zippedURL, to: stableURL)
         return stableURL
+    }
+
+    static func exportZipURL(experiences: [Experience]) throws -> URL {
+        try live.exportZipURL(experiences: experiences)
     }
 
     // MARK: - Helpers
 
     /// Lists the base filenames already present in `folder`, excluding `excluded` (the experience's
     /// own current file, so re-syncing the same experience doesn't treat its own file as a collision).
-    private static func folderContents(_ folder: URL, excluding excluded: String?) -> Set<String> {
+    private func folderContents(_ folder: URL, excluding excluded: String?) -> Set<String> {
         var names: Set<String> = []
         var coordinatorError: NSError?
         let coordinator = NSFileCoordinator()
         coordinator.coordinate(readingItemAt: folder, options: [], error: &coordinatorError) { readURL in
-            let contents = (try? FileManager.default.contentsOfDirectory(atPath: readURL.path)) ?? []
+            let contents = (try? fileSystem.contentsOfDirectory(atPath: readURL.path)) ?? []
             names = Set(contents)
         }
         if let coordinatorError {
-            logger.error("Failed to list mirror folder contents: \(coordinatorError.localizedDescription)")
+            Self.logger.error("Failed to list mirror folder contents: \(coordinatorError.localizedDescription)")
         }
         if let excluded { names.remove(excluded) }
         return names
@@ -229,32 +291,32 @@ enum MarkdownMirrorService {
     /// Writes `text` to `destination` atomically via `NSFileCoordinator`, so a concurrent iCloud sync
     /// of the same folder doesn't race the write. Returns whether the write succeeded.
     @discardableResult
-    private static func writeCoordinated(_ text: String, to destination: URL) -> Bool {
+    private func writeCoordinated(_ text: String, to destination: URL) -> Bool {
         var coordinatorError: NSError?
         var succeeded = false
         let coordinator = NSFileCoordinator()
         coordinator.coordinate(writingItemAt: destination, options: [.forReplacing], error: &coordinatorError) { writeURL in
             do {
-                try text.write(to: writeURL, atomically: true, encoding: .utf8)
+                try fileSystem.write(text, to: writeURL)
                 succeeded = true
             } catch {
-                logger.error("Failed to write mirror file: \(error.localizedDescription)")
+                Self.logger.error("Failed to write mirror file: \(error.localizedDescription)")
             }
         }
         if let coordinatorError {
-            logger.error("File coordinator error writing mirror file: \(coordinatorError.localizedDescription)")
+            Self.logger.error("File coordinator error writing mirror file: \(coordinatorError.localizedDescription)")
         }
         return succeeded
     }
 
-    private static func removeCoordinated(_ url: URL) {
+    private func removeCoordinated(_ url: URL) {
         var coordinatorError: NSError?
         let coordinator = NSFileCoordinator()
         coordinator.coordinate(writingItemAt: url, options: [.forDeleting], error: &coordinatorError) { deleteURL in
-            try? FileManager.default.removeItem(at: deleteURL)
+            try? fileSystem.removeItem(at: deleteURL)
         }
         if let coordinatorError {
-            logger.error("File coordinator error removing stale mirror file: \(coordinatorError.localizedDescription)")
+            Self.logger.error("File coordinator error removing stale mirror file: \(coordinatorError.localizedDescription)")
         }
     }
 }
