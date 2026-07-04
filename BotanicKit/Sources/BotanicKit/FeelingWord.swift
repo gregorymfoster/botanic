@@ -42,3 +42,30 @@ public enum PresenceTag {
         "Open", "Soft", "Alert", "Heavy", "Light", "Tearful"
     ]
 }
+
+/// The v2 "What's present?" chip groups — body, mind, heart — each with its own fixed word set.
+/// Rows are sorted by the user's own usage frequency at display time (see `CheckInWordEngine`);
+/// this type only defines the canonical group membership and label.
+public enum PresenceGroup: String, CaseIterable, Sendable {
+    case body
+    case mind
+    case heart
+
+    /// The all-caps section label shown above the chip row.
+    public var label: String {
+        switch self {
+        case .body: return "BODY"
+        case .mind: return "MIND"
+        case .heart: return "HEART"
+        }
+    }
+
+    /// The chip words offered in this group, in canonical (pre-usage-sort) order.
+    public var words: [String] {
+        switch self {
+        case .body: return ["Warm", "Soft", "Heavy", "Tingly", "Restless"]
+        case .mind: return ["Clear", "Quiet", "Foggy", "Racing", "Curious"]
+        case .heart: return ["Calm", "Tender", "Grateful", "Open", "Uneasy"]
+        }
+    }
+}
