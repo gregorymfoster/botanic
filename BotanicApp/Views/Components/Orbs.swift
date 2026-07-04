@@ -90,6 +90,8 @@ struct CheckInOrb: View {
                 .font(Dusk.serifItalic(28))
                 .foregroundStyle(Dusk.onAccent)
                 .shadow(color: .white.opacity(0.4), radius: 8)
+                // Crossfades the word as the check-in sliders move, instead of a hard cut.
+                .contentTransition(.opacity)
         }
         .frame(width: size, height: size)
         .accessibilityElement(children: .ignore)

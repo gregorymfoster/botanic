@@ -19,7 +19,11 @@ struct CheckInDraft {
     var intensity: Double = 0.38
     var bodyLoad: Double = 0.28
     var feeling: FeelingWord = .settled
-    var tags: Set<String> = ["Grounded", "Calm"]
+    // "Grounded" was part of the old flat PresenceTag vocabulary and isn't a member of any
+    // PresenceGroup word set (body/mind/heart) — default to no pre-selected tags instead of
+    // seeding a word the new UI can't display or toggle.
+    var tags: Set<String> = []
+    var note: String = ""
 }
 
 struct ReflectionDraft {
@@ -119,7 +123,8 @@ enum ExperienceStore {
             intensity: draft.intensity,
             bodyLoad: draft.bodyLoad,
             feeling: draft.feeling,
-            tags: Array(draft.tags).sorted()
+            tags: Array(draft.tags).sorted(),
+            note: cleaned(draft.note)
         )
         checkIn.experience = experience
         context.insert(checkIn)

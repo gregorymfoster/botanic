@@ -129,7 +129,6 @@ struct AddSupplementView: View {
 
     private func save() {
         guard draft.isValid else { return }
-        Haptics.success()
         onSave(draft)
     }
 }

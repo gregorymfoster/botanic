@@ -10,10 +10,16 @@ struct RootView: View {
     @State private var showingAdd = false
     @State private var showingCheckIn = false
     @State private var showingEnd = false
-    @State private var showingJournal = false
+    @State private var showingNote = false
     @State private var pendingInsights = false
     @State private var didSeed = false
     @State private var historyPath: [Experience] = []
+
+    /// A bloom staged by a save closure but not yet promoted — held until its sheet's `showing*`
+    /// flag transitions to `false`, so the bloom only appears once the sheet has actually dismissed.
+    @State private var pendingBloom: BloomEvent?
+    /// The bloom currently shown by the overlay, if any.
+    @State private var bloomEvent: BloomEvent?
 
     private var liveExperience: Experience? {
         experiences.first { $0.endedAt == nil }
@@ -47,7 +53,7 @@ struct RootView: View {
                 switch target {
                 case "add": showingAdd = true
                 case "checkin": showingCheckIn = true
-                case "journal": showingJournal = true
+                case "journal", "note": showingNote = true
                 case "end": showingEnd = true
                 default: break
                 }
@@ -71,7 +77,7 @@ struct RootView: View {
                     live: liveExperience,
                     onAdd: { showingAdd = true },
                     onCheckIn: { showingCheckIn = true },
-                    onNote: { showingJournal = true },
+                    onNote: { showingNote = true },
                     onEnd: { showingEnd = true }
                 )
             }
@@ -120,7 +126,13 @@ struct RootView: View {
         }
         .sheet(isPresented: $showingAdd) {
             AddSupplementView(hasLiveExperience: liveExperience != nil) { draft in
-                ExperienceStore.addSupplement(draft, in: modelContext)
+                let experience = ExperienceStore.addSupplement(draft, in: modelContext)
+                pendingBloom = BloomEvent(
+                    kind: .supplement(draft.name.trimmingCharacters(in: .whitespacesAndNewlines)),
+                    savedAt: Date(),
+                    liveTitle: experience.title,
+                    liveElapsed: experience.duration().botanicDuration
+                )
                 showingAdd = false
             }
             .presentationBackground(.clear)
@@ -129,16 +141,30 @@ struct RootView: View {
             if let live = liveExperience {
                 CheckInView(experience: live) { draft in
                     ExperienceStore.addCheckIn(draft, to: live, in: modelContext)
+                    pendingBloom = BloomEvent(
+                        kind: .checkIn(draft.feeling.rawValue),
+                        savedAt: Date(),
+                        liveTitle: live.title,
+                        liveElapsed: live.duration().botanicDuration
+                    )
                     showingCheckIn = false
                 }
                 .presentationBackground(.clear)
             }
         }
-        .sheet(isPresented: $showingJournal) {
+        .sheet(isPresented: $showingNote) {
             if let live = liveExperience {
-                JournalView(experience: live) { text, kind, prompt in
+                NoteView(experience: live) { text, kind, prompt in
                     ExperienceStore.addJournalEntry(text: text, kind: kind, prompt: prompt,
                                                     to: live, in: modelContext)
+                    pendingBloom = BloomEvent(
+                        kind: .note,
+                        savedAt: Date(),
+                        liveTitle: live.title,
+                        liveElapsed: live.duration().botanicDuration
+                    )
+                    // NoteView dismisses itself via `dismiss()` after calling this closure, which
+                    // flips `showingNote` to false and triggers the `.onChange` below.
                 }
                 .presentationBackground(.clear)
             }
@@ -153,5 +179,27 @@ struct RootView: View {
                 .presentationDetents([.large])
             }
         }
+        .onChange(of: showingAdd) { _, isPresented in promoteBloom(if: !isPresented) }
+        .onChange(of: showingCheckIn) { _, isPresented in promoteBloom(if: !isPresented) }
+        .onChange(of: showingNote) { _, isPresented in promoteBloom(if: !isPresented) }
+        .overlay {
+            if let event = bloomEvent {
+                BloomMomentOverlay(event: event) {
+                    withAnimation(.easeOut(duration: 0.3)) { bloomEvent = nil }
+                }
+                .transition(.opacity)
+                .zIndex(10)
+            }
+        }
+    }
+
+    /// Promotes a staged bloom into the visible overlay once its sheet has actually dismissed,
+    /// firing the single success haptic for the save at that moment (bloom-appearance now owns the
+    /// only haptic per save — ad hoc haptics were removed from each sheet's own save action).
+    private func promoteBloom(if dismissed: Bool) {
+        guard dismissed, let event = pendingBloom else { return }
+        pendingBloom = nil
+        Haptics.success()
+        withAnimation(.easeOut(duration: 0.25)) { bloomEvent = event }
     }
 }
