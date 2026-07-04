@@ -14,6 +14,9 @@ struct RootView: View {
     @State private var pendingInsights = false
     @State private var didSeed = false
     @State private var historyPath: [Experience] = []
+    /// Set by the Today idle screen's "Again tonight?" quick-add before showing the Add sheet, so
+    /// the sheet can seed its draft from a past supplement. Cleared once the sheet dismisses.
+    @State private var addPrefill: SupplementDraft?
 
     /// A bloom staged by a save closure but not yet promoted — held until its sheet's `showing*`
     /// flag transitions to `false`, so the bloom only appears once the sheet has actually dismissed.
@@ -76,6 +79,10 @@ struct RootView: View {
                 TodayView(
                     live: liveExperience,
                     onAdd: { showingAdd = true },
+                    onQuickAdd: { draft in
+                        addPrefill = draft
+                        showingAdd = true
+                    },
                     onCheckIn: { showingCheckIn = true },
                     onNote: { showingNote = true },
                     onEnd: { showingEnd = true }
@@ -124,8 +131,8 @@ struct RootView: View {
             selectedTab = .today
             showingCheckIn = true
         }
-        .sheet(isPresented: $showingAdd) {
-            AddSupplementView(hasLiveExperience: liveExperience != nil) { draft in
+        .sheet(isPresented: $showingAdd, onDismiss: { addPrefill = nil }) {
+            AddSupplementView(hasLiveExperience: liveExperience != nil, initialDraft: addPrefill) { draft in
                 let experience = ExperienceStore.addSupplement(draft, in: modelContext)
                 pendingBloom = BloomEvent(
                     kind: .supplement(draft.name.trimmingCharacters(in: .whitespacesAndNewlines)),

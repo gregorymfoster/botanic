@@ -1,13 +1,39 @@
 import BotanicKit
+import SwiftData
 import SwiftUI
 
 struct AddSupplementView: View {
     var hasLiveExperience: Bool
+    var initialDraft: SupplementDraft?
     var onSave: (SupplementDraft) -> Void
 
+    init(hasLiveExperience: Bool, initialDraft: SupplementDraft? = nil, onSave: @escaping (SupplementDraft) -> Void) {
+        self.hasLiveExperience = hasLiveExperience
+        self.initialDraft = initialDraft
+        self.onSave = onSave
+        self._draft = State(initialValue: initialDraft ?? SupplementDraft())
+    }
+
     @Environment(\.dismiss) private var dismiss
-    @State private var draft = SupplementDraft()
+    @Query(sort: \SupplementLibraryItem.lastUsedAt, order: .reverse) private var libraryItems: [SupplementLibraryItem]
+    @State private var draft: SupplementDraft
     @FocusState private var nameFocused: Bool
+
+    private var librarySnapshots: [SupplementLibrarySnapshot] {
+        libraryItems.map {
+            SupplementLibrarySnapshot(
+                name: $0.name,
+                lastAmount: $0.lastAmount,
+                lastIntention: $0.lastIntention,
+                useCount: $0.useCount,
+                lastUsedAt: $0.lastUsedAt
+            )
+        }
+    }
+
+    private var recentMatches: [SupplementLibrarySnapshot] {
+        SupplementRecents.recents(librarySnapshots, matching: draft.name, limit: 6)
+    }
 
     var body: some View {
         SheetScaffold(
@@ -27,6 +53,10 @@ struct AddSupplementView: View {
                             .foregroundStyle(Dusk.text)
                             .focused($nameFocused)
                             .submitLabel(.done)
+                    }
+
+                    if !libraryItems.isEmpty {
+                        recentsRow
                     }
 
                     FieldBlock(label: "How you're taking it") {
@@ -69,6 +99,59 @@ struct AddSupplementView: View {
             }
         }
         .onAppear { nameFocused = true }
+    }
+
+    private var recentsRow: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            ScrollView(.horizontal) {
+                HStack(spacing: 9) {
+                    ForEach(recentMatches, id: \.name) { item in
+                        recentChip(item)
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+            .scrollIndicators(.hidden)
+
+            Text("Your recents — one tap fills amount and intention from last time.")
+                .font(Dusk.sans(11.5))
+                .foregroundStyle(Dusk.muted(0.5))
+        }
+        .padding(.horizontal, 2)
+    }
+
+    private func recentChip(_ item: SupplementLibrarySnapshot) -> some View {
+        let selected = item.name.compare(draft.name.trimmingCharacters(in: .whitespacesAndNewlines),
+                                          options: .caseInsensitive) == .orderedSame
+        return Button {
+            Haptics.selection()
+            draft.name = item.name
+            draft.howTaking = item.lastAmount ?? ""
+            draft.intention = item.lastIntention ?? ""
+        } label: {
+            HStack(spacing: 5) {
+                Text(item.name)
+                    .font(Dusk.sans(13.5, selected ? .semibold : .regular))
+                if selected {
+                    Image(systemName: "checkmark").font(.system(size: 10, weight: .bold))
+                }
+            }
+            .foregroundStyle(selected ? Dusk.onAccent : Dusk.muted(0.75))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .frame(minHeight: 32)
+            .background {
+                if selected {
+                    Capsule().fill(Dusk.accentGradient)
+                } else {
+                    Capsule().fill(.white.opacity(0.06))
+                        .overlay(Capsule().strokeBorder(Dusk.glassStroke, lineWidth: 1))
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(item.name)
+        .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
     }
 
     private var whenSection: some View {

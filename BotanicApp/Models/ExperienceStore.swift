@@ -12,6 +12,16 @@ struct SupplementDraft {
     var scheduledFor: Date = Date().addingTimeInterval(30 * 60)
 
     var isValid: Bool { !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    init() {}
+
+    /// Seeds a draft from a remembered library entry — used by the Today "Again tonight?" quick-add
+    /// and the Add sheet's recents chips, both of which prefill name/amount/intention from a past log.
+    init(prefillingFrom item: SupplementLibraryItem) {
+        self.name = item.name
+        self.howTaking = item.lastAmount ?? ""
+        self.intention = item.lastIntention ?? ""
+    }
 }
 
 struct CheckInDraft {
