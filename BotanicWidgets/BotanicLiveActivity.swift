@@ -24,7 +24,7 @@ struct BotanicLiveActivity: Widget {
                         .foregroundStyle(DuskWidget.peach)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    elapsed(from: context.state.startedAt)
+                    elapsed(from: context.state.startedAt, to: context.state.endedAt)
                         .font(.callout.monospacedDigit())
                         .foregroundStyle(DuskWidget.peach)
                         .frame(maxWidth: 72, alignment: .trailing)
@@ -50,7 +50,7 @@ struct BotanicLiveActivity: Widget {
             } compactLeading: {
                 Image(systemName: "leaf.fill").foregroundStyle(DuskWidget.peach)
             } compactTrailing: {
-                elapsed(from: context.state.startedAt)
+                elapsed(from: context.state.startedAt, to: context.state.endedAt)
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(DuskWidget.peach)
                     .frame(maxWidth: 68, alignment: .trailing)
@@ -62,9 +62,10 @@ struct BotanicLiveActivity: Widget {
         }
     }
 
-    /// A counting-up elapsed clock the OS redraws on its own.
-    private func elapsed(from start: Date) -> some View {
-        Text(timerInterval: start...Date.distantFuture, countsDown: false)
+    /// A counting-up elapsed clock the OS redraws on its own. Once `end` is set the interval closes,
+    /// freezing the timer at the experience's final duration so an ended activity stops ticking.
+    private func elapsed(from start: Date, to end: Date?) -> some View {
+        Text(timerInterval: start...(end ?? .distantFuture), countsDown: false)
     }
 }
 
@@ -95,7 +96,7 @@ private struct LockScreenLiveView: View {
             Spacer(minLength: 8)
 
             VStack(alignment: .trailing, spacing: 8) {
-                Text(timerInterval: state.startedAt...Date.distantFuture, countsDown: false)
+                Text(timerInterval: state.startedAt...(state.endedAt ?? .distantFuture), countsDown: false)
                     .font(.title3.monospacedDigit())
                     .foregroundStyle(DuskWidget.peach)
                     .frame(maxWidth: 90, alignment: .trailing)

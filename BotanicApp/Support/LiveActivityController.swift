@@ -16,9 +16,11 @@ final class LiveActivityController {
     /// Re-attach to an activity still running from a previous launch (e.g. the app was backgrounded
     /// while an experience stayed live). Matches on the experience id when one is provided.
     func adopt(liveExperienceID: UUID?) {
-        guard activity == nil else { return }
+        // Only re-attach when there's a live experience to match. A nil id means nothing is live, so
+        // adopting "any" running activity would re-grab one we're in the middle of ending — see `end`.
+        guard activity == nil, let liveExperienceID else { return }
         activity = Activity<BotanicActivityAttributes>.activities.first { running in
-            liveExperienceID == nil || running.attributes.experienceID == liveExperienceID
+            running.attributes.experienceID == liveExperienceID
         }
     }
 
@@ -46,6 +48,6 @@ final class LiveActivityController {
         guard let activity else { return }
         let finishing = activity
         self.activity = nil
-        Task { await finishing.end(.init(state: state, staleDate: nil), dismissalPolicy: .default) }
+        Task { await finishing.end(.init(state: state, staleDate: nil), dismissalPolicy: .immediate) }
     }
 }

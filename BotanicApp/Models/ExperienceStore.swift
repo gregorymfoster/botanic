@@ -197,6 +197,7 @@ enum ExperienceStore {
     private static func liveState(for experience: Experience) -> BotanicActivityAttributes.ContentState {
         .init(
             startedAt: experience.startedAt,
+            endedAt: experience.endedAt,
             title: experience.title,
             supplementCount: experience.loggedSupplements.count,
             checkInCount: experience.checkIns.count,

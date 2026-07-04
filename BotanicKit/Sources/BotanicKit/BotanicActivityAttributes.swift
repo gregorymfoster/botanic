@@ -14,6 +14,9 @@ public struct BotanicActivityAttributes: ActivityAttributes {
     /// `Text(timerInterval:)`, so the app never has to push timer ticks.
     public struct ContentState: Codable, Hashable {
         public var startedAt: Date
+        /// Set when the experience closes — freezes the widget's elapsed clock at this instant.
+        /// `nil` while live (the timer counts up open-endedly).
+        public var endedAt: Date?
         public var title: String
         public var supplementCount: Int
         public var checkInCount: Int
@@ -22,12 +25,14 @@ public struct BotanicActivityAttributes: ActivityAttributes {
 
         public init(
             startedAt: Date,
+            endedAt: Date? = nil,
             title: String,
             supplementCount: Int,
             checkInCount: Int,
             latestSupplement: String? = nil
         ) {
             self.startedAt = startedAt
+            self.endedAt = endedAt
             self.title = title
             self.supplementCount = supplementCount
             self.checkInCount = checkInCount
