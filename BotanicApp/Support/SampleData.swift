@@ -16,7 +16,25 @@ enum SampleData {
 
         seedHistory(into: context)
         if wantsFull { seedLive(into: context) }
+        seedLibrary(into: context)
         try? context.save()
+    }
+
+    /// Seeds a few remembered supplements consistent with the seeded supplement entries above, so
+    /// the quick-add UI has data to prefill from.
+    private static func seedLibrary(into context: ModelContext) {
+        let now = Date()
+        let items = [
+            SupplementLibraryItem(name: "Magnesium glycinate", lastAmount: "2 capsules with water",
+                                  lastIntention: "A calmer evening and deeper sleep.",
+                                  useCount: 7, lastUsedAt: now.addingTimeInterval(-2 * 3600)),
+            SupplementLibraryItem(name: "Chamomile tea", lastAmount: "1 mug, warm",
+                                  lastIntention: nil, useCount: 6, lastUsedAt: now.addingTimeInterval(-48 * 60)),
+            SupplementLibraryItem(name: "L-theanine", lastAmount: "1 capsule",
+                                  lastIntention: "Steadier focus without the edge.",
+                                  useCount: 4, lastUsedAt: now.addingTimeInterval(-25 * 60))
+        ]
+        for item in items { context.insert(item) }
     }
 
     private static func seedLive(into context: ModelContext) {
@@ -56,9 +74,13 @@ enum SampleData {
 
         for spec in specs {
             guard let start = cal.date(byAdding: .day, value: -spec.daysAgo, to: base) else { continue }
-            let exp = Experience(title: spec.title, startedAt: start,
+            let exp = Experience(title: spec.title,
+                                 subtitle: spec.subtitle,
+                                 startedAt: start,
                                  endedAt: start.addingTimeInterval(spec.minutes * 60),
-                                 locationContext: spec.location)
+                                 locationContext: spec.location,
+                                 titleSource: spec.subtitle == nil ? .user : .ai,
+                                 feltWords: spec.feltWords)
             exp.feltSummary = spec.feeling
             exp.noteToFuture = spec.note
             context.insert(exp)
@@ -86,6 +108,7 @@ enum SampleData {
     private struct Spec {
         let daysAgo: Int
         let title: String
+        let subtitle: String?
         let minutes: Double
         let location: String
         let feeling: FeelingWord
@@ -93,14 +116,35 @@ enum SampleData {
         let checkIns: Int
         let oneWord: String?
         let note: String?
+        let feltWords: [String]
+
+        init(daysAgo: Int, title: String, subtitle: String? = nil, minutes: Double, location: String,
+             feeling: FeelingWord, supplements: [String], checkIns: Int, oneWord: String?, note: String?,
+             feltWords: [String] = []) {
+            self.daysAgo = daysAgo
+            self.title = title
+            self.subtitle = subtitle
+            self.minutes = minutes
+            self.location = location
+            self.feeling = feeling
+            self.supplements = supplements
+            self.checkIns = checkIns
+            self.oneWord = oneWord
+            self.note = note
+            self.feltWords = feltWords
+        }
     }
 
     private static let specs: [Spec] = [
-        Spec(daysAgo: 54, title: "Evening at home", minutes: 160, location: "Home", feeling: .settled,
+        Spec(daysAgo: 54, title: "Evening at home", subtitle: "A quiet wind-down with tea and magnesium",
+             minutes: 160, location: "Home", feeling: .settled,
              supplements: ["Magnesium glycinate", "Chamomile tea", "L-theanine"], checkIns: 3, oneWord: "Steady",
-             note: "The tea + a quiet room was the right combination. 3 check-ins felt like enough."),
-        Spec(daysAgo: 76, title: "Sunday slow morning", minutes: 110, location: "Garden", feeling: .warm,
-             supplements: ["Magnesium glycinate", "Chamomile tea"], checkIns: 2, oneWord: "Warm", note: nil),
+             note: "The tea + a quiet room was the right combination. 3 check-ins felt like enough.",
+             feltWords: ["Steady", "Warm", "Settled"]),
+        Spec(daysAgo: 76, title: "Sunday slow morning", subtitle: "Garden light and chamomile",
+             minutes: 110, location: "Garden", feeling: .warm,
+             supplements: ["Magnesium glycinate", "Chamomile tea"], checkIns: 2, oneWord: "Warm", note: nil,
+             feltWords: ["Warm", "Open"]),
         Spec(daysAgo: 117, title: "After the long walk", minutes: 55, location: "Out", feeling: .luminous,
              supplements: ["L-theanine"], checkIns: 1, oneWord: "Open", note: nil),
         Spec(daysAgo: 140, title: "Evening at home", minutes: 145, location: "Home", feeling: .calm,

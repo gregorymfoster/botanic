@@ -69,9 +69,35 @@ enum ExperienceStore {
         )
         entry.experience = experience
         context.insert(entry)
+        updateLibrary(for: entry.name, draft: draft, at: entry.effectiveTime, in: context)
         save(context)
         syncLiveActivity(for: experience)
         return experience
+    }
+
+    /// Upserts the remembered-supplement library entry so future logging can prefill the last
+    /// amount and intention used for this supplement. Matches by trimmed, case-insensitive name.
+    private static func updateLibrary(for name: String, draft: SupplementDraft, at loggedAt: Date, in context: ModelContext) {
+        let descriptor = FetchDescriptor<SupplementLibraryItem>()
+        let existing = (try? context.fetch(descriptor))?.first {
+            $0.name.compare(name, options: .caseInsensitive) == .orderedSame
+        }
+
+        if let item = existing {
+            item.lastAmount = cleaned(draft.howTaking)
+            item.lastIntention = cleaned(draft.intention)
+            item.useCount += 1
+            item.lastUsedAt = loggedAt
+        } else {
+            let item = SupplementLibraryItem(
+                name: name,
+                lastAmount: cleaned(draft.howTaking),
+                lastIntention: cleaned(draft.intention),
+                useCount: 1,
+                lastUsedAt: loggedAt
+            )
+            context.insert(item)
+        }
     }
 
     static func startExperience(in context: ModelContext, now: Date = Date()) -> Experience {

@@ -14,6 +14,8 @@ struct BotanicApp: App {
                 .tint(Dusk.accent)
                 .preferredColorScheme(.dark)
         }
-        .modelContainer(for: [Experience.self, SupplementEntry.self, CheckIn.self, JournalEntry.self])
+        .modelContainer(for: [
+            Experience.self, SupplementEntry.self, CheckIn.self, JournalEntry.self, SupplementLibraryItem.self
+        ])
     }
 }

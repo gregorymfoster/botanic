@@ -8,12 +8,22 @@ import SwiftData
 final class Experience {
     @Attribute(.unique) var id: UUID
     var title: String
+    /// Optional secondary line shown under the title (e.g. an AI-drafted gloss).
+    var subtitle: String?
     var startedAt: Date
     var endedAt: Date?
     var locationContext: String?
     /// Stored as `FeelingWord.rawValue`; bridged through `feltSummary`.
     var feltSummaryRaw: String?
     var noteToFuture: String?
+    /// Stored as `TitleSource.rawValue`; bridged through `titleSource`. Defaults to `.user` so
+    /// existing rows (and any unrecognized value) are treated as user-authored.
+    var titleSourceRaw: String = TitleSource.user.rawValue
+    /// Felt words stored as a newline-joined string; SwiftData faults on plain `[String]`
+    /// attributes, so we bridge through `feltWords` (same pattern as `CheckIn.tagsRaw`).
+    var feltWordsRaw: String = ""
+    /// Filename of the exported markdown for this experience, if it's been exported.
+    var markdownFilename: String?
 
     @Relationship(deleteRule: .cascade, inverse: \SupplementEntry.experience)
     var supplements: [SupplementEntry] = []
@@ -25,15 +35,23 @@ final class Experience {
     init(
         id: UUID = UUID(),
         title: String = "Evening at home",
+        subtitle: String? = nil,
         startedAt: Date = Date(),
         endedAt: Date? = nil,
-        locationContext: String? = nil
+        locationContext: String? = nil,
+        titleSource: TitleSource = .user,
+        feltWords: [String] = [],
+        markdownFilename: String? = nil
     ) {
         self.id = id
         self.title = title
+        self.subtitle = subtitle
         self.startedAt = startedAt
         self.endedAt = endedAt
         self.locationContext = locationContext
+        self.titleSourceRaw = titleSource.rawValue
+        self.feltWordsRaw = feltWords.joined(separator: "\n")
+        self.markdownFilename = markdownFilename
     }
 
     var isLive: Bool { endedAt == nil }
@@ -41,6 +59,16 @@ final class Experience {
     var feltSummary: FeelingWord? {
         get { feltSummaryRaw.flatMap(FeelingWord.init(rawValue:)) }
         set { feltSummaryRaw = newValue?.rawValue }
+    }
+
+    var titleSource: TitleSource {
+        get { TitleSource(rawValue: titleSourceRaw) ?? .user }
+        set { titleSourceRaw = newValue.rawValue }
+    }
+
+    var feltWords: [String] {
+        get { feltWordsRaw.isEmpty ? [] : feltWordsRaw.components(separatedBy: "\n") }
+        set { feltWordsRaw = newValue.joined(separator: "\n") }
     }
 
     /// Elapsed time, using `endedAt` once closed or `now` while live.
@@ -124,6 +152,7 @@ final class CheckIn {
     /// Tags stored as a newline-joined string; SwiftData faults on plain `[String]` attributes, so
     /// we bridge through `tags`.
     var tagsRaw: String
+    var note: String?
     var experience: Experience?
 
     init(
@@ -133,7 +162,8 @@ final class CheckIn {
         intensity: Double = 0.38,
         bodyLoad: Double = 0.28,
         feeling: FeelingWord? = .settled,
-        tags: [String] = []
+        tags: [String] = [],
+        note: String? = nil
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -142,6 +172,7 @@ final class CheckIn {
         self.bodyLoad = bodyLoad
         self.feelingRaw = feeling?.rawValue
         self.tagsRaw = tags.joined(separator: "\n")
+        self.note = note
     }
 
     var feeling: FeelingWord? {
