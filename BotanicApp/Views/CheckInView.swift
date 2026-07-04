@@ -89,15 +89,17 @@ struct CheckInView: View {
                 // animates rather than relying on an ambient transaction from the slider drag.
                 .animation(.easeInOut(duration: 0.2), value: orbWord)
 
+            // Offsets keep every chip fully outside the orb's 94pt radius so the words stay
+            // legible against the background rather than getting swallowed by the orb's glow.
             satelliteChip(CheckInWordEngine.valenceWord(draft.valence), color: Dusk.peach)
-                .offset(x: -78, y: -64)
+                .offset(x: -112, y: -78)
             satelliteChip(CheckInWordEngine.intensityWord(draft.intensity), color: violet)
-                .offset(x: 78, y: -58)
+                .offset(x: 112, y: -72)
             satelliteChip(CheckInWordEngine.bodyLoadWord(draft.bodyLoad), color: Dusk.lavender)
-                .offset(y: 92)
+                .offset(x: 58, y: 108)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
+        .padding(.vertical, 16)
     }
 
     private func satelliteChip(_ word: String, color: Color) -> some View {

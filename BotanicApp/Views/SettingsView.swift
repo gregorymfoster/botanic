@@ -85,6 +85,8 @@ struct SettingsView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+        // Own backdrop: the iOS 26 TabView doesn't let RootView's shared background show through.
+        .background(DuskBackground().ignoresSafeArea())
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.large)
         .onAppear { mirrorFolderURL = MarkdownMirrorService.resolveFolder() }

@@ -21,6 +21,10 @@ struct TodayView: View {
                 IdleTodayView(onAdd: onAdd, onQuickAdd: onQuickAdd)
             }
         }
+        // Each tab draws its own backdrop: on iOS 26 the TabView no longer lets RootView's shared
+        // background show through, so relying on it leaves the screen near-black (History/Insights/
+        // Detail already carry their own).
+        .background(DuskBackground(live: live != nil).ignoresSafeArea())
     }
 }
 

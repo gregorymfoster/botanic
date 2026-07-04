@@ -2,9 +2,13 @@
 
 ## Repo Map
 
-- `BotanicKit`: shared Swift package — `DuskPalette`, `FeelingWord`, `JournalPrompt`,
-  `InsightsEngine`, `Formatting`, and package tests. Framework-free and deterministic.
-- `BotanicApp`: iPhone SwiftUI app — SwiftData models, `Dusk` design system, screens, components.
+- `BotanicKit`: shared Swift package — `DuskPalette`, `FeelingWord`/`PresenceGroup`,
+  `JournalPrompt`, `InsightsEngine`, `Formatting`, `CheckInWordEngine`, `SupplementRecents`,
+  `MarkdownFileNaming`, `ExperienceSummaryGenerator` (deterministic fallback), `FeltWordSummary`,
+  and package tests. Framework-free and deterministic; platform floor stays iOS 17.
+- `BotanicApp`: iPhone SwiftUI app — SwiftData models, `Dusk` design system, screens, components,
+  and services (`MarkdownMirrorService`, `BackupManager`, `NotificationManager`,
+  `FoundationModelsSummarizer`).
 - `project.yml`: XcodeGen source of truth for `Botanic.xcodeproj`.
 
 ## Safe Commands
@@ -41,10 +45,14 @@ automatically, `scripts/install-hooks.sh` wires `pre-commit → check.sh --fast`
   models → snapshots, then calls the engine — never reference SwiftData inside the package.
 - If new Swift files are added to the app target, update `project.yml` and run `xcodegen generate`.
 - `Botanic.xcodeproj` is gitignored — it's regenerated, never hand-edited.
+- On-device AI lives **only in the app target**: `FoundationModelsSummarizer` wraps Apple's
+  FoundationModels behind BotanicKit's `ExperienceSummarizing` protocol and always falls back to
+  `DeterministicExperienceSummarizer`. Never import FoundationModels inside `BotanicKit`.
 
 ## iOS Practices
 
-- **Deployment target is iOS 17.** Use modern APIs freely; do not add `if #available` guards.
+- **Deployment target is iOS 26 for the app target** (FoundationModels); `BotanicKit` stays at
+  iOS 17. Use modern APIs freely in the app; do not add `if #available` guards below iOS 26.
 - **Concurrency:** UI and view-model state types are `@MainActor`. Prefer `async`/`await` and
   `Task {}` over `DispatchQueue`.
 - **No force-unwraps in app code.** Avoid `!`, `try!`, `as!`; handle the `nil`/throwing path.
