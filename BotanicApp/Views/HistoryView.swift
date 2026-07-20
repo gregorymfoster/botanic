@@ -1,4 +1,5 @@
 import BotanicKit
+import SwiftData
 import SwiftUI
 
 struct HistoryView: View {

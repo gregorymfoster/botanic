@@ -117,9 +117,7 @@ struct InsightsView: View {
 
     private func helpCard(_ help: HelpComparison) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            (Text("Evenings with ")
-                + Text(help.supplement.lowercased()).foregroundColor(Dusk.peachLight)
-                + Text(" tended to feel \(help.isHelpful ? "calmer" : "different")."))
+            Text("Evenings with \(Text(help.supplement.lowercased()).foregroundColor(Dusk.peachLight)) tended to feel \(help.isHelpful ? "calmer" : "different").")
                 .font(Dusk.serif(16)).foregroundStyle(Dusk.text)
 
             compareBar(label: "With \(firstWord(help.supplement))", value: help.withScore / 10,

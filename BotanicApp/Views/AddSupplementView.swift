@@ -204,8 +204,7 @@ struct AddSupplementView: View {
     private var startsNewHint: some View {
         HStack(spacing: 11) {
             Image(systemName: "plus").font(.system(size: 15, weight: .semibold)).foregroundStyle(Dusk.pinkSoft)
-            (Text("No experience running — saving this ")
-                + Text("starts a new one.").foregroundColor(Dusk.text))
+            Text("No experience running — saving this starts a new one.")
                 .font(Dusk.sans(12.5))
                 .foregroundStyle(Dusk.muted(0.7))
         }
