@@ -1,18 +1,17 @@
 import ActivityKit
+import AppIntents
 import BotanicKit
 import SwiftUI
 import WidgetKit
 
 /// The Botanic Live Activity: a calm presence on the lock screen and Dynamic Island for the life of
 /// an experience. Elapsed time self-renders via `Text(timerInterval:)`, so the app only pushes
-/// updates when supplement / check-in counts change. The "Check in" affordance deep-links into the
-/// app's check-in sheet (`botanic://checkin`) — logging needs the app's slider UI.
+/// updates when supplement / check-in counts change. Quick actions are LiveActivityIntent buttons,
+/// which execute in the app process and write through the app-owned store.
 struct BotanicLiveActivity: Widget {
-    private static let checkInURL = URL(string: "botanic://checkin")!
-
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: BotanicActivityAttributes.self) { context in
-            LockScreenLiveView(state: context.state, checkInURL: Self.checkInURL)
+            LockScreenLiveView(state: context.state, experienceID: context.attributes.experienceID)
                 .padding(16)
                 .activityBackgroundTint(DuskWidget.surface.opacity(0.92))
                 .activitySystemActionForegroundColor(DuskWidget.text)
@@ -36,29 +35,19 @@ struct BotanicLiveActivity: Widget {
                         .lineLimit(1)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    Link(destination: Self.checkInURL) {
-                        Label("Check in", systemImage: "circle.dashed.inset.filled")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(DuskWidget.text)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .background(
-                                Capsule().fill(DuskWidget.peach.opacity(0.22))
-                            )
+                    HStack(spacing: 8) {
+                        CheckInButton(experienceID: context.attributes.experienceID)
+                        EndButton(experienceID: context.attributes.experienceID)
                     }
                 }
             } compactLeading: {
                 Image(systemName: "leaf.fill").foregroundStyle(DuskWidget.peach)
             } compactTrailing: {
-                elapsed(from: context.state.startedAt, to: context.state.endedAt)
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(DuskWidget.peach)
-                    .frame(maxWidth: 68, alignment: .trailing)
+                CompactTrailingView(state: context.state)
             } minimal: {
                 Image(systemName: "leaf.fill").foregroundStyle(DuskWidget.peach)
             }
             .keylineTint(DuskWidget.peach)
-            .widgetURL(Self.checkInURL)
         }
     }
 
@@ -72,7 +61,7 @@ struct BotanicLiveActivity: Widget {
 /// The lock-screen / banner presentation.
 private struct LockScreenLiveView: View {
     let state: BotanicActivityAttributes.ContentState
-    let checkInURL: URL
+    let experienceID: UUID
 
     var body: some View {
         HStack(spacing: 14) {
@@ -100,15 +89,115 @@ private struct LockScreenLiveView: View {
                     .font(.title3.monospacedDigit())
                     .foregroundStyle(DuskWidget.peach)
                     .frame(maxWidth: 90, alignment: .trailing)
-                Link(destination: checkInURL) {
-                    Text("Check in")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(DuskWidget.text)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(DuskWidget.peach.opacity(0.24)))
+                HStack(spacing: 6) {
+                    CheckInButton(experienceID: experienceID)
+                    EndButton(experienceID: experienceID)
                 }
             }
+        }
+        .background {
+            if #available(iOS 27.0, *) {
+                StandByBackground()
+            }
+        }
+    }
+}
+
+private struct CheckInButton: View {
+    let experienceID: UUID
+
+    var body: some View {
+        Button(intent: CheckInLiveActivityIntent(experienceID: experienceID)) {
+            Label("Check in", systemImage: "circle.dashed.inset.filled")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(DuskWidget.text)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 7)
+                .background(Capsule().fill(DuskWidget.peach.opacity(0.24)))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct EndButton: View {
+    let experienceID: UUID
+
+    var body: some View {
+        Button(intent: EndLiveActivityIntent(experienceID: experienceID)) {
+            Label("End", systemImage: "stop.circle.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(DuskWidget.text)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 7)
+                .background(Capsule().fill(DuskWidget.lavender.opacity(0.22)))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct CompactTrailingView: View {
+    let state: BotanicActivityAttributes.ContentState
+
+    var body: some View {
+#if compiler(>=6.4)
+        if #available(iOS 27.0, *) {
+            LimitedWidthCompactTrailingView(state: state)
+        } else {
+            elapsed
+        }
+#else
+        elapsed
+#endif
+    }
+
+    private var elapsed: some View {
+        Text(timerInterval: state.startedAt...(state.endedAt ?? .distantFuture), countsDown: false)
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(DuskWidget.peach)
+            .frame(maxWidth: 68, alignment: .trailing)
+    }
+}
+
+/// Landscape Dynamic Island compact presentations have a fixed narrow width in iOS 27. Keep the
+/// timer in the expanded presentation and use an unambiguous glyph here instead of truncating it.
+#if compiler(>=6.4)
+@available(iOS 27.0, *)
+private struct LimitedWidthCompactTrailingView: View {
+    @Environment(\.isDynamicIslandLimitedInWidth) private var isLimitedInWidth
+    let state: BotanicActivityAttributes.ContentState
+
+    var body: some View {
+        if isLimitedInWidth {
+            Image(systemName: "timer")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(DuskWidget.peach)
+                .accessibilityLabel("Experience timer")
+        } else {
+            Text(timerInterval: state.startedAt...(state.endedAt ?? .distantFuture), countsDown: false)
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(DuskWidget.peach)
+                .frame(maxWidth: 68, alignment: .trailing)
+        }
+    }
+}
+#endif
+
+/// StandBy scales the lock-screen presentation up in landscape. On iOS 27, the container
+/// background environment lets the activity extend its dusk surface edge-to-edge in that mode.
+@available(iOS 27.0, *)
+private struct StandByBackground: View {
+    @Environment(\.showsWidgetContainerBackground) private var showsWidgetContainerBackground
+
+    var body: some View {
+        if showsWidgetContainerBackground {
+            LinearGradient(
+                colors: [DuskWidget.surface, DuskWidget.surface.opacity(0.72)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
         }
     }
 }

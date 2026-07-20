@@ -8,7 +8,7 @@ TEAM_ID="${APPLE_TEAM_ID:-2V7W69N399}"
 ASC_KEY_ID="${ASC_KEY_ID:-XS4DNNPK82}"
 ASC_ISSUER_ID="${ASC_ISSUER_ID:-69a6de74-5cd4-47e3-e053-5b8c7c11a4d1}"
 ASC_KEY_PATH="${ASC_KEY_PATH:-$HOME/Library/Mobile Documents/com~apple~CloudDocs/AuthKey_${ASC_KEY_ID}.p8}"
-MARKETING_VERSION="${MARKETING_VERSION:-0.1.4}"
+MARKETING_VERSION="${MARKETING_VERSION:-0.2.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-$(date -u +%Y%m%d%H%M)}"
 OUTPUT_DIR="${OUTPUT_DIR:-$ROOT_DIR/build/TestFlight}"
 ARCHIVE_PATH="$OUTPUT_DIR/Botanic-${BUILD_NUMBER}.xcarchive"
@@ -77,4 +77,3 @@ xcodebuild \
   -authenticationKeyIssuerID "$ASC_ISSUER_ID"
 
 echo "Done. Uploaded build $BUILD_NUMBER for version $MARKETING_VERSION."
-

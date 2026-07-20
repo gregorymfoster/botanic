@@ -104,7 +104,9 @@ struct NotificationManager {
         let seconds = TimeInterval(NotificationPolicy.clampedReminderIntervalMinutes(intervalMinutes) * 60)
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: true)
         let request = UNNotificationRequest(identifier: Self.reminderID, content: content, trigger: trigger)
-        center.add(request)
+        Task { @MainActor in
+            try? await UNUserNotificationCenter.current().add(request)
+        }
     }
 
     // MARK: - Scheduled-supplement alerts
@@ -131,7 +133,7 @@ struct NotificationManager {
                 let request = UNNotificationRequest(
                     identifier: Self.supplementAlertID(id), content: content, trigger: trigger
                 )
-                center.add(request)
+                try? await UNUserNotificationCenter.current().add(request)
             }
         }
     }
@@ -170,7 +172,7 @@ struct NotificationManager {
                 let request = UNNotificationRequest(
                     identifier: Self.quietSuggestID, content: content, trigger: trigger
                 )
-                center.add(request)
+                try? await UNUserNotificationCenter.current().add(request)
             }
         }
     }

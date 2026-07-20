@@ -15,7 +15,7 @@ settings:
     DEVELOPMENT_TEAM: 2V7W69N399
     CODE_SIGN_STYLE: Automatic
     CURRENT_PROJECT_VERSION: "1"
-    MARKETING_VERSION: "0.1.4"
+    MARKETING_VERSION: "0.2.0"
     VERSIONING_SYSTEM: apple-generic
 targets:
   Botanic:
@@ -45,6 +45,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.gregfoster.botanic
         PRODUCT_NAME: Botanic
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) BOTANIC_APP_TARGET"
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Botanic
@@ -62,6 +63,7 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - BotanicWidgets
+      - path: BotanicApp/Support/BotanicLiveActivityIntents.swift
     dependencies:
       - package: BotanicKit
     info:
